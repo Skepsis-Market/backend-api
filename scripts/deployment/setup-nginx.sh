@@ -19,6 +19,13 @@ echo ""
 echo "📦 Installing Nginx..."
 sudo apt-get install -y nginx
 
+# Add rate limiting to main nginx config
+echo ""
+echo "⚙️  Configuring rate limiting..."
+if ! grep -q "limit_req_zone" /etc/nginx/nginx.conf; then
+    sudo sed -i '/http {/a \    limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;' /etc/nginx/nginx.conf
+fi
+
 # Create Nginx configuration
 echo ""
 echo "⚙️  Creating Nginx configuration..."
@@ -32,8 +39,14 @@ server {
     add_header X-Content-Type-Options \"nosniff\" always;
     add_header X-XSS-Protection \"1; mode=block\" always;
 
+    # Max body size
+    client_max_body_size 10M;
+
     # Proxy settings
     location / {
+        # Rate limiting
+        limit_req zone=api_limit burst=20 nodelay;
+        
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
         
@@ -55,13 +68,6 @@ server {
         # Cache bypass
         proxy_cache_bypass \$http_upgrade;
     }
-
-    # Rate limiting for API endpoints
-    limit_req_zone \$binary_remote_addr zone=api_limit:10m rate=10r/s;
-    limit_req zone=api_limit burst=20 nodelay;
-
-    # Max body size
-    client_max_body_size 10M;
 }
 EOF"
 
