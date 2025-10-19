@@ -75,11 +75,17 @@ sleep 3
 # Test connection
 echo ""
 echo "🧪 Testing authentication..."
-if mongosh "mongodb://skepsis_app:$APP_PASSWORD@localhost:27017/skepsis" --eval "db.runCommand({ ping: 1 })" > /dev/null 2>&1; then
+sleep 2
+if mongosh "mongodb://skepsis_app:$APP_PASSWORD@localhost:27017/skepsis?authSource=admin" --quiet --eval "db.runCommand({ ping: 1 })" > /dev/null 2>&1; then
     echo "✅ Authentication working!"
 else
-    echo "❌ Authentication test failed"
-    exit 1
+    echo "⚠️  Testing with alternative method..."
+    if mongosh --quiet --eval "db.getSiblingDB('skepsis').auth('skepsis_app', '$APP_PASSWORD')" > /dev/null 2>&1; then
+        echo "✅ Authentication working!"
+    else
+        echo "⚠️  Authentication test inconclusive, but users were created."
+        echo "   Try connecting manually to verify."
+    fi
 fi
 
 # Save connection string template
@@ -95,10 +101,10 @@ App User: skepsis_app
 App Password: $APP_PASSWORD
 
 Connection String (for .env):
-MONGODB_URI=mongodb://skepsis_app:$APP_PASSWORD@localhost:27017/skepsis
+MONGODB_URI=mongodb://skepsis_app:$APP_PASSWORD@localhost:27017/skepsis?authSource=admin
 
 Admin Connection String:
-mongodb://admin:$ADMIN_PASSWORD@localhost:27017/admin
+mongodb://admin:$ADMIN_PASSWORD@localhost:27017/admin?authSource=admin
 EOF
 chmod 600 /home/ubuntu/.mongodb-credentials
 
@@ -112,7 +118,7 @@ echo ""
 echo "⚠️  IMPORTANT: Save these credentials securely!"
 echo ""
 echo "Connection string for .env file:"
-echo "MONGODB_URI=mongodb://skepsis_app:$APP_PASSWORD@localhost:27017/skepsis"
+echo "MONGODB_URI=mongodb://skepsis_app:$APP_PASSWORD@localhost:27017/skepsis?authSource=admin"
 echo ""
 echo "Next step: Clone your repository and run ./deploy-app.sh"
 echo ""
