@@ -6,11 +6,17 @@ echo "Skepsis Backend - Quick Update Deployment"
 echo "================================================"
 echo ""
 
-APP_DIR="/home/ubuntu/skepsis-backend"
 APP_NAME="skepsis-backend"
 
-if [ ! -d "$APP_DIR" ]; then
-    echo "❌ Application directory not found: $APP_DIR"
+# Auto-detect app directory
+if [ -f "package.json" ]; then
+    APP_DIR=$(pwd)
+elif [ -d "/home/ubuntu/skepsis-backend" ]; then
+    APP_DIR="/home/ubuntu/skepsis-backend"
+elif [ -d "/home/ubuntu/backend-api" ]; then
+    APP_DIR="/home/ubuntu/backend-api"
+else
+    echo "❌ Application directory not found"
     exit 1
 fi
 

@@ -7,15 +7,23 @@ echo "================================================"
 echo ""
 
 # Variables
-APP_DIR="/home/ubuntu/skepsis-backend"
 APP_NAME="skepsis-backend"
 
-# Check if directory exists
-if [ ! -d "$APP_DIR" ]; then
-    echo "❌ Application directory not found: $APP_DIR"
-    echo "Please clone the repository first:"
-    echo "  cd /home/ubuntu"
-    echo "  git clone <your-repo-url> skepsis-backend"
+# Auto-detect app directory (find package.json)
+if [ -f "package.json" ]; then
+    APP_DIR=$(pwd)
+    echo "✅ Detected app directory: $APP_DIR"
+elif [ -d "/home/ubuntu/skepsis-backend" ]; then
+    APP_DIR="/home/ubuntu/skepsis-backend"
+    cd $APP_DIR
+elif [ -d "/home/ubuntu/backend-api" ]; then
+    APP_DIR="/home/ubuntu/backend-api"
+    cd $APP_DIR
+else
+    echo "❌ Application directory not found!"
+    echo "Please run this script from your app directory, or ensure your repo is in:"
+    echo "  /home/ubuntu/skepsis-backend OR"
+    echo "  /home/ubuntu/backend-api"
     exit 1
 fi
 
