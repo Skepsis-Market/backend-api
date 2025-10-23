@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
 import { WaitlistModule } from './modules/waitlist/waitlist.module';
+import { PortfolioModule } from './modules/portfolio/portfolio.module';
+import { MarketsModule } from './modules/markets/markets.module';
 
 @Module({
   imports: [
@@ -16,6 +18,8 @@ import { WaitlistModule } from './modules/waitlist/waitlist.module';
     
     // Feature modules
     WaitlistModule,
+    PortfolioModule,
+    MarketsModule,
   ],
 })
 export class AppModule {}
