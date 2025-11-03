@@ -80,6 +80,9 @@ export class Market {
   priceFeed?: string; // API URL for price feed (e.g., CoinGecko)
 
   @Prop()
+  resolutionCriteria?: string; // Detailed criteria for market resolution
+
+  @Prop()
   livePrice?: string;
 
   @Prop()
