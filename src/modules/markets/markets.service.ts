@@ -72,10 +72,15 @@ export class MarketsService {
 
   /**
    * Update market status (resolved or cancelled)
+   * When status is 'resolved', resolvedValue should be provided
    */
-  async updateMarketStatus(marketId: string, status: string) {
+  async updateMarketStatus(marketId: string, status: string, resolvedValue?: number) {
     if (!['resolved', 'cancelled'].includes(status)) {
       throw new BadRequestException('Status must be either "resolved" or "cancelled"');
+    }
+
+    if (status === 'resolved' && resolvedValue === undefined) {
+      throw new BadRequestException('resolvedValue is required when status is "resolved"');
     }
 
     const market = await this.marketModel.findOne({ marketId });
@@ -84,12 +89,16 @@ export class MarketsService {
     }
 
     market.status = status;
+    if (status === 'resolved' && resolvedValue !== undefined) {
+      market.resolvedValue = resolvedValue;
+    }
     await market.save();
 
     return {
       message: `Market status updated to ${status}`,
       marketId: market.marketId,
       status: market.status,
+      ...(market.resolvedValue !== undefined && { resolvedValue: market.resolvedValue }),
     };
   }
 

@@ -74,10 +74,16 @@ export class Market {
   configuration: Configuration;
 
   @Prop({ required: true })
-  marketType: string;
+  marketType: string; // cryptocurrency, prediction, sports, etc.
+
+  @Prop()
+  priceFeed?: string; // API URL for price feed (e.g., CoinGecko)
 
   @Prop()
   livePrice?: string;
+
+  @Prop()
+  resolvedValue?: number;
 
   @Prop({ default: 'active' })
   status: string; // active, resolved, expired

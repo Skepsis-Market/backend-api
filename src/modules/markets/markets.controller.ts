@@ -49,13 +49,15 @@ export class MarketsController {
   /**
    * PATCH /api/markets/:marketId/status
    * Update market status to resolved or cancelled
+   * Body: { status: 'resolved' | 'cancelled', resolvedValue?: number }
    */
   @Patch(':marketId/status')
   async updateMarketStatus(
     @Param('marketId') marketId: string,
     @Body('status') status: string,
+    @Body('resolvedValue') resolvedValue?: number,
   ) {
-    return this.marketsService.updateMarketStatus(marketId, status);
+    return this.marketsService.updateMarketStatus(marketId, status, resolvedValue);
   }
 
   /**
