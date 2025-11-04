@@ -86,7 +86,7 @@ export class CreateMarketDto {
   @IsNotEmpty()
   marketType: string;
 
-  @IsUrl()
+  @IsString()
   @IsOptional()
   priceFeed?: string;
 
@@ -94,7 +94,7 @@ export class CreateMarketDto {
   @IsOptional()
   resolutionCriteria?: string;
 
-  @IsUrl()
+  @IsString()
   @IsOptional()
   livePrice?: string;
 }

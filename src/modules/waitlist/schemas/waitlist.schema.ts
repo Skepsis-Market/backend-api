@@ -35,6 +35,15 @@ export class Waitlist {
 
   @Prop()
   used_at: Date;
+  
+  @Prop({ default: false })
+  isShared: boolean;
+
+  @Prop()
+  shared_at?: Date;
+
+  @Prop()
+  shared_by?: string;
 }
 
 export const WaitlistSchema = SchemaFactory.createForClass(Waitlist);

@@ -15,6 +15,9 @@ interface WaitlistEntry {
   status: string;
   approved_at?: Date;
   used_at?: Date;
+  isShared?: boolean;
+  shared_at?: Date;
+  shared_by?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -29,6 +32,9 @@ const WaitlistSchema = new mongoose.Schema({
   status: String,
   approved_at: Date,
   used_at: Date,
+  isShared: Boolean,
+  shared_at: Date,
+  shared_by: String,
 }, { timestamps: true });
 
 async function main() {
@@ -56,6 +62,8 @@ async function main() {
   const pending = allEntries.filter((e: any) => e.status === 'pending');
   const approved = allEntries.filter((e: any) => e.status === 'approved');
   const used = allEntries.filter((e: any) => e.status === 'used');
+  const shared = allEntries.filter((e: any) => e.isShared === true);
+  const approvedNotShared = allEntries.filter((e: any) => e.status === 'approved' && !e.isShared);
 
   // Count wallets
   const totalWallets = allEntries.reduce((sum: number, e: any) => {
@@ -69,8 +77,9 @@ async function main() {
   console.log(`📊 TOTAL ENTRIES: ${allEntries.length}`);
   console.log('───────────────────────────────────────────────────────────────');
   console.log(`⏳ Pending:  ${pending.length}`);
-  console.log(`✅ Approved: ${approved.length}`);
+  console.log(`✅ Approved: ${approved.length} (${approvedNotShared.length} not shared)`);
   console.log(`🔒 Used:     ${used.length}`);
+  console.log(`📤 Shared:   ${shared.length}`);
   console.log('───────────────────────────────────────────────────────────────');
   console.log(`💼 Connected Wallets: ${totalWallets} (${uniqueWallets} unique)`);
   console.log('═══════════════════════════════════════════════════════════════\n');
@@ -96,9 +105,9 @@ async function main() {
   // Display APPROVED entries
   if (approved.length > 0) {
     console.log('✅ APPROVED (With Access Codes):\n');
-    console.log('┌────┬─────────────────────────┬────────────┬──────────────┬────────────┐');
-    console.log('│ #  │ Contact                 │ Code       │ Persona      │ Approved   │');
-    console.log('├────┼─────────────────────────┼────────────┼──────────────┼────────────┤');
+    console.log('┌────┬─────────────────────────┬────────────┬──────────────┬────────────┬────────┐');
+    console.log('│ #  │ Contact                 │ Code       │ Persona      │ Approved   │ Shared │');
+    console.log('├────┼─────────────────────────┼────────────┼──────────────┼────────────┼────────┤');
     
     approved.forEach((entry: any, index: number) => {
       const num = String(index + 1).padEnd(2);
@@ -106,10 +115,11 @@ async function main() {
       const code = (entry.access_code || 'N/A').padEnd(10);
       const persona = (entry.persona?.join(', ') || 'none').padEnd(12);
       const date = new Date(entry.approved_at).toLocaleDateString().padEnd(10);
-      console.log(`│ ${num} │ ${contact} │ ${code} │ ${persona} │ ${date} │`);
+      const shared = (entry.isShared ? '✅' : '❌').padEnd(6);
+      console.log(`│ ${num} │ ${contact} │ ${code} │ ${persona} │ ${date} │ ${shared} │`);
     });
     
-    console.log('└────┴─────────────────────────┴────────────┴──────────────┴────────────┘\n');
+    console.log('└────┴─────────────────────────┴────────────┴──────────────┴────────────┴────────┘\n');
   }
 
   // Display USED entries

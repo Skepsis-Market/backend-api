@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Waitlist, WaitlistDocument } from './schemas/waitlist.schema';
 import { parseContact } from '../../common/utils/contact-parser.util';
+import { generateAccessCode } from '../../common/utils/code-generator.util';
 import { JoinWaitlistDto } from './dto/join-waitlist.dto';
 import { ActivateCodeDto } from './dto/activate-code.dto';
 
@@ -100,6 +101,140 @@ export class WaitlistService {
       persona: entry.persona || [],
       wallet: dto.wallet_address,
       total_wallets: entry.wallet_addresses.length,
+    };
+  }
+
+  /**
+   * Set or unset shared flag for an access code
+   */
+  async setShared(accessCode: string, isShared: boolean, sharedBy?: string) {
+    const entry = await this.waitlistModel.findOne({ access_code: accessCode.toUpperCase() });
+    if (!entry) {
+      throw new NotFoundException('Access code not found');
+    }
+
+    entry.isShared = isShared;
+    if (isShared) {
+      entry.shared_at = new Date();
+      if (sharedBy) entry.shared_by = sharedBy;
+    } else {
+      entry.shared_at = undefined;
+      entry.shared_by = undefined;
+    }
+
+    await entry.save();
+
+    return {
+      message: `Access code ${isShared ? 'marked as shared' : 'unshared'}`,
+      access_code: entry.access_code,
+      isShared: entry.isShared,
+      shared_at: entry.shared_at,
+      shared_by: entry.shared_by,
+    };
+  }
+
+  /**
+   * Get waitlist items filtered by status parameter
+   * supported status: pending, shared, approved_not_shared
+   */
+  async getByStatus(status: string) {
+    let query: any = {};
+    switch ((status || '').toLowerCase()) {
+      case 'pending':
+        query = { status: 'pending' };
+        break;
+      case 'shared':
+        query = { isShared: true };
+        break;
+      case 'approved_not_shared':
+        query = { status: 'approved', $or: [{ isShared: false }, { isShared: { $exists: false } }] };
+        break;
+      default:
+        // return all if no known status provided
+        query = {};
+    }
+
+    const items = await this.waitlistModel.find(query).sort({ createdAt: -1 }).lean();
+    return { total: items.length, items };
+  }
+
+  /**
+   * Generate access codes for pending waitlist entries
+   * Optional filters: limit, persona, specific contacts
+   */
+  async generateCodes(limit?: number, persona?: string[], contacts?: string[]) {
+    let query: any = { status: 'pending' };
+    
+    // Filter by specific contacts if provided
+    if (contacts && contacts.length > 0) {
+      query.contact = { $in: contacts };
+    }
+
+    // Fetch pending entries
+    let pendingEntries = await this.waitlistModel.find(query);
+    
+    if (pendingEntries.length === 0) {
+      return {
+        message: 'No pending entries found',
+        generated: 0,
+        codes: [],
+      };
+    }
+
+    // Apply limit if specified
+    if (limit && limit > 0) {
+      pendingEntries = pendingEntries.slice(0, limit);
+    }
+
+    const generated: any[] = [];
+    const errors: any[] = [];
+
+    for (const entry of pendingEntries) {
+      try {
+        // Generate unique code
+        let code = generateAccessCode();
+        let attempts = 0;
+        const maxAttempts = 10;
+
+        // Ensure code is unique
+        while (await this.waitlistModel.findOne({ access_code: code }) && attempts < maxAttempts) {
+          code = generateAccessCode();
+          attempts++;
+        }
+
+        if (attempts >= maxAttempts) {
+          errors.push({ contact: entry.contact_raw, error: 'Failed to generate unique code' });
+          continue;
+        }
+
+        // Update entry
+        entry.access_code = code;
+        entry.status = 'approved';
+        entry.approved_at = new Date();
+        
+        // Set persona if provided
+        if (persona && persona.length > 0) {
+          entry.persona = persona;
+        }
+
+        await entry.save();
+
+        generated.push({
+          contact: entry.contact_raw,
+          platform: entry.platform,
+          access_code: code,
+          persona: entry.persona || [],
+        });
+      } catch (error) {
+        errors.push({ contact: entry.contact_raw, error: error.message });
+      }
+    }
+
+    return {
+      message: `Generated ${generated.length} access codes`,
+      generated: generated.length,
+      codes: generated,
+      errors: errors.length > 0 ? errors : undefined,
     };
   }
 }
