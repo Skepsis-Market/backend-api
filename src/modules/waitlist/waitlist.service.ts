@@ -125,20 +125,80 @@ export class WaitlistService {
 
   /**
    * Set or unset shared flag by contact (telegram/twitter handle)
+   * Creates a new user with access code if they don't exist (upsert)
    */
   async setShared(contact: string, isShared: boolean, sharedBy?: string) {
     // Parse contact to get normalized format
     const parsed = parseContact(contact);
     
-    const entry = await this.waitlistModel.findOne({ contact: parsed.contact });
+    let entry = await this.waitlistModel.findOne({ contact: parsed.contact });
+    
+    // If user doesn't exist, create them with an access code
     if (!entry) {
-      throw new NotFoundException('Contact not found in waitlist');
+      // Generate unique access code
+      let code = generateAccessCode();
+      let attempts = 0;
+      const maxAttempts = 10;
+
+      // Ensure code is unique
+      while (await this.waitlistModel.findOne({ access_code: code }) && attempts < maxAttempts) {
+        code = generateAccessCode();
+        attempts++;
+      }
+
+      if (attempts >= maxAttempts) {
+        throw new Error('Failed to generate unique access code');
+      }
+
+      // Create new entry
+      entry = new this.waitlistModel({
+        contact: parsed.contact,
+        contact_raw: parsed.contact_raw,
+        platform: parsed.platform,
+        status: 'approved',
+        access_code: code,
+        approved_at: new Date(),
+        persona: ['trader', 'lp'],
+        isShared: isShared,
+        shared_at: isShared ? new Date() : undefined,
+        shared_by: isShared ? sharedBy : undefined,
+      });
+
+      await entry.save();
+
+      return {
+        message: `User created and access code ${isShared ? 'shared' : 'generated'}`,
+        contact: entry.contact_raw,
+        access_code: entry.access_code,
+        isShared: entry.isShared,
+        shared_at: entry.shared_at,
+        shared_by: entry.shared_by,
+      };
     }
 
+    // User exists - check if they have an access code
     if (!entry.access_code) {
-      throw new BadRequestException('No access code generated for this contact');
+      // Generate code for existing user
+      let code = generateAccessCode();
+      let attempts = 0;
+      const maxAttempts = 10;
+
+      while (await this.waitlistModel.findOne({ access_code: code }) && attempts < maxAttempts) {
+        code = generateAccessCode();
+        attempts++;
+      }
+
+      if (attempts >= maxAttempts) {
+        throw new Error('Failed to generate unique access code');
+      }
+
+      entry.access_code = code;
+      entry.status = 'approved';
+      entry.approved_at = new Date();
+      entry.persona = ['trader', 'lp'];
     }
 
+    // Update shared status
     entry.isShared = isShared;
     if (isShared) {
       entry.shared_at = new Date();
