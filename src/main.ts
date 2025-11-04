@@ -48,13 +48,17 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, document);
+  SwaggerModule.setup('api-docs', app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,
+    },
+  });
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
   
   console.log(`🚀 Skepsis Backend running on http://localhost:${port}`);
-  console.log(`📚 API Docs available at http://localhost:${port}/api/docs`);
+  console.log(`📚 API Docs available at http://localhost:${port}/api-docs`);
   console.log(`📊 MongoDB: ${process.env.MONGODB_URI}`);
 }
 
