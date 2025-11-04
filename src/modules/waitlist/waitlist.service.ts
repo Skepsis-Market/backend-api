@@ -27,12 +27,31 @@ export class WaitlistService {
         throw new ConflictException('Already registered in waitlist');
       }
 
-      // Create waitlist entry
+      // Generate unique access code
+      let code = generateAccessCode();
+      let attempts = 0;
+      const maxAttempts = 10;
+
+      // Ensure code is unique
+      while (await this.waitlistModel.findOne({ access_code: code }) && attempts < maxAttempts) {
+        code = generateAccessCode();
+        attempts++;
+      }
+
+      if (attempts >= maxAttempts) {
+        throw new Error('Failed to generate unique access code');
+      }
+
+      // Create waitlist entry with code and approved status
       const waitlistEntry = new this.waitlistModel({
         contact: parsed.contact,
         contact_raw: parsed.contact_raw,
         platform: parsed.platform,
-        status: 'pending',
+        status: 'approved',
+        access_code: code,
+        approved_at: new Date(),
+        persona: ['trader', 'lp'], // Default personas
+        isShared: false,
       });
 
       await waitlistEntry.save();
@@ -105,12 +124,19 @@ export class WaitlistService {
   }
 
   /**
-   * Set or unset shared flag for an access code
+   * Set or unset shared flag by contact (telegram/twitter handle)
    */
-  async setShared(accessCode: string, isShared: boolean, sharedBy?: string) {
-    const entry = await this.waitlistModel.findOne({ access_code: accessCode.toUpperCase() });
+  async setShared(contact: string, isShared: boolean, sharedBy?: string) {
+    // Parse contact to get normalized format
+    const parsed = parseContact(contact);
+    
+    const entry = await this.waitlistModel.findOne({ contact: parsed.contact });
     if (!entry) {
-      throw new NotFoundException('Access code not found');
+      throw new NotFoundException('Contact not found in waitlist');
+    }
+
+    if (!entry.access_code) {
+      throw new BadRequestException('No access code generated for this contact');
     }
 
     entry.isShared = isShared;
@@ -126,6 +152,7 @@ export class WaitlistService {
 
     return {
       message: `Access code ${isShared ? 'marked as shared' : 'unshared'}`,
+      contact: entry.contact_raw,
       access_code: entry.access_code,
       isShared: entry.isShared,
       shared_at: entry.shared_at,
@@ -156,85 +183,5 @@ export class WaitlistService {
 
     const items = await this.waitlistModel.find(query).sort({ createdAt: -1 }).lean();
     return { total: items.length, items };
-  }
-
-  /**
-   * Generate access codes for pending waitlist entries
-   * Optional filters: limit, persona, specific contacts
-   */
-  async generateCodes(limit?: number, persona?: string[], contacts?: string[]) {
-    let query: any = { status: 'pending' };
-    
-    // Filter by specific contacts if provided
-    if (contacts && contacts.length > 0) {
-      query.contact = { $in: contacts };
-    }
-
-    // Fetch pending entries
-    let pendingEntries = await this.waitlistModel.find(query);
-    
-    if (pendingEntries.length === 0) {
-      return {
-        message: 'No pending entries found',
-        generated: 0,
-        codes: [],
-      };
-    }
-
-    // Apply limit if specified
-    if (limit && limit > 0) {
-      pendingEntries = pendingEntries.slice(0, limit);
-    }
-
-    const generated: any[] = [];
-    const errors: any[] = [];
-
-    for (const entry of pendingEntries) {
-      try {
-        // Generate unique code
-        let code = generateAccessCode();
-        let attempts = 0;
-        const maxAttempts = 10;
-
-        // Ensure code is unique
-        while (await this.waitlistModel.findOne({ access_code: code }) && attempts < maxAttempts) {
-          code = generateAccessCode();
-          attempts++;
-        }
-
-        if (attempts >= maxAttempts) {
-          errors.push({ contact: entry.contact_raw, error: 'Failed to generate unique code' });
-          continue;
-        }
-
-        // Update entry
-        entry.access_code = code;
-        entry.status = 'approved';
-        entry.approved_at = new Date();
-        
-        // Set persona if provided
-        if (persona && persona.length > 0) {
-          entry.persona = persona;
-        }
-
-        await entry.save();
-
-        generated.push({
-          contact: entry.contact_raw,
-          platform: entry.platform,
-          access_code: code,
-          persona: entry.persona || [],
-        });
-      } catch (error) {
-        errors.push({ contact: entry.contact_raw, error: error.message });
-      }
-    }
-
-    return {
-      message: `Generated ${generated.length} access codes`,
-      generated: generated.length,
-      codes: generated,
-      errors: errors.length > 0 ? errors : undefined,
-    };
   }
 }
