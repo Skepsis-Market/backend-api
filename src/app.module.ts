@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { WaitlistModule } from './modules/waitlist/waitlist.module';
 import { PortfolioModule } from './modules/portfolio/portfolio.module';
 import { MarketsModule } from './modules/markets/markets.module';
+import { EnokiModule } from './modules/enoki/enoki.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { MarketsModule } from './modules/markets/markets.module';
     WaitlistModule,
     PortfolioModule,
     MarketsModule,
+    EnokiModule,
   ],
 })
 export class AppModule {}

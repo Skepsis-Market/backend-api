@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiSecurity, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiSecurity, ApiResponse, ApiParam, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { MarketsService } from './markets.service';
 import { CreateMarketDto } from './dto/create-market.dto';
 import { AdminGuard } from '../../common/guards/admin.guard';
@@ -16,7 +16,83 @@ export class MarketsController {
   @UseGuards(AdminGuard)
   @Post()
   @ApiSecurity('admin-key')
-  @ApiOperation({ summary: 'Create market (Admin)', description: 'Create a new prediction market' })
+  @ApiOperation({ 
+    summary: 'Create market (Admin)', 
+    description: `Create a new prediction market.
+
+**cURL Example:**
+\`\`\`bash
+curl -X POST https://api.skepsis.live/api/markets \\
+  -H "Content-Type: application/json" \\
+  -H "x-admin-secret: YOUR_ADMIN_SECRET" \\
+  -d '{
+    "marketId": "0x2e24e453f1cf9bbec2ae26e9a89e4718dcc19e4ffddc84a4d40e854dc7b0d438",
+    "creatorCapId": "0xe513709db7de3c1bf235659872116534b3f0f94f053411b21296f3173c9b7ac3",
+    "packageId": "0x02b74bc5d2e5e8816731972b3a314429c6f9e270fc35136ffe52d9fa9db93d6d",
+    "network": "testnet",
+    "createdAt": "1762205571525",
+    "transactionDigest": "4utQS71inTmTV5rZKB83oRLi6Tro2QTUyWciSTbPauak",
+    "configuration": {
+      "marketName": "Bitcoin Price Prediction Nov 5",
+      "question": "What will be the price of Bitcoin (BTC/USD) on November 5, 2025?",
+      "description": "Predict Bitcoin price at market resolution",
+      "category": "Cryptocurrency",
+      "minValue": 95000,
+      "maxValue": 115000,
+      "bucketCount": 200,
+      "bucketWidth": 100,
+      "decimalPrecision": 0,
+      "valueUnit": "USD",
+      "biddingDeadline": 1762286400000,
+      "resolutionTime": 1762286400000,
+      "initialLiquidity": 50000000000,
+      "usdcType": "0x6030cba32d70bb17c95c60f35363fec6e9ab2a733ee92730dbf9bcb865f300a5::usdc::USDC",
+      "marketUrl": "bitcoin-price-prediction-nov-5"
+    },
+    "marketType": "cryptocurrency",
+    "priceFeed": "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd",
+    "resolutionCriteria": "Resolves using CoinGecko price at 20:00 UTC"
+  }'
+\`\`\`
+    `
+  })
+  @ApiBody({
+    type: CreateMarketDto,
+    examples: {
+      bitcoinMarket: {
+        summary: 'Bitcoin Price Market',
+        description: 'Example of creating a Bitcoin price prediction market',
+        value: {
+          marketId: '0x2e24e453f1cf9bbec2ae26e9a89e4718dcc19e4ffddc84a4d40e854dc7b0d438',
+          creatorCapId: '0xe513709db7de3c1bf235659872116534b3f0f94f053411b21296f3173c9b7ac3',
+          packageId: '0x02b74bc5d2e5e8816731972b3a314429c6f9e270fc35136ffe52d9fa9db93d6d',
+          network: 'testnet',
+          createdAt: '1762205571525',
+          transactionDigest: '4utQS71inTmTV5rZKB83oRLi6Tro2QTUyWciSTbPauak',
+          configuration: {
+            marketName: 'Bitcoin Price Prediction Nov 5',
+            question: 'What will be the price of Bitcoin (BTC/USD) on November 5, 2025?',
+            description: 'Predict Bitcoin\'s price at market resolution. Current price: $108,000',
+            category: 'Cryptocurrency',
+            minValue: 95000,
+            maxValue: 115000,
+            bucketCount: 200,
+            bucketWidth: 100,
+            decimalPrecision: 0,
+            valueUnit: 'USD',
+            biddingDeadline: 1762286400000,
+            resolutionTime: 1762286400000,
+            initialLiquidity: 50000000000,
+            usdcType: '0x6030cba32d70bb17c95c60f35363fec6e9ab2a733ee92730dbf9bcb865f300a5::usdc::USDC',
+            marketUrl: 'bitcoin-price-prediction-nov-5'
+          },
+          marketType: 'cryptocurrency',
+          priceFeed: 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true',
+          resolutionCriteria: 'This market resolves using the Bitcoin (BTC/USD) price reported by CoinGecko at 20:00:00 UTC on 2025-11-04. The final price will be the floor price (removing decimals) of the reported price for settlement.'
+        }
+      }
+    }
+  })
   @ApiResponse({ status: 201, description: 'Market created successfully' })
   @ApiResponse({ status: 401, description: 'Invalid or missing admin credentials' })
   async createMarket(@Body() createMarketDto: CreateMarketDto) {
