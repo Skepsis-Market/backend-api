@@ -75,10 +75,11 @@ export class EnokiService {
 
       if (!sponsorResponse.ok) {
         const error = await sponsorResponse.text();
-        throw new Error(`Enoki sponsorship request failed: ${error}`);
+        throw new Error(`Enoki sponsorship request failed: ${sponsorResponse.status} ${error}`);
       }
 
-      const { bytes, digest } = await sponsorResponse.json();
+      const sponsorData = await sponsorResponse.json();
+      const { bytes, digest } = sponsorData.data || sponsorData;
 
       // Step 2: Submit user's signature and get sponsor-signed transaction
       const signatureResponse = await fetch(
@@ -97,15 +98,16 @@ export class EnokiService {
 
       if (!signatureResponse.ok) {
         const error = await signatureResponse.text();
-        throw new Error(`Enoki signature submission failed: ${error}`);
+        throw new Error(`Enoki signature submission failed: ${signatureResponse.status} ${error}`);
       }
 
-      const sponsoredTxData = await signatureResponse.json();
+      const signatureData = await signatureResponse.json();
+      const sponsoredTxData = signatureData.data || signatureData;
 
       // Step 3: Execute sponsored transaction on Sui network
       const result = await this.suiClient.executeTransactionBlock({
-        transactionBlock: sponsoredTxData.bytes,
-        signature: [userSignature, sponsoredTxData.signature],
+        transactionBlock: sponsoredTxData.bytes || bytes,
+        signature: sponsoredTxData.signature || [userSignature, sponsoredTxData.sponsorSignature],
         options: {
           showEffects: true,
           showEvents: true,
@@ -123,6 +125,14 @@ export class EnokiService {
 
     } catch (error) {
       console.error('Sponsorship error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        userAddress,
+        zkLoginJwt: zkLoginJwt ? 'present' : 'missing',
+        userSignature: userSignature ? 'present' : 'missing',
+        transactionKindBytes: transactionKindBytes ? `length: ${transactionKindBytes.length}` : 'missing'
+      });
       throw new BadRequestException(error.message || 'Transaction sponsorship failed');
     }
   }
