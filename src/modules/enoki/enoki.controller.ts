@@ -18,24 +18,38 @@ export class EnokiController {
     summary: 'Sponsor transaction',
     description: `Sponsor a user's transaction (gas fees paid by backend).
     
+**Flow:**
+1. Frontend builds transaction with \`onlyTransactionKind: true\`
+2. Frontend signs the transaction bytes with zkLogin
+3. Frontend sends: transactionKindBytes + userSignature + zkLoginJwt
+4. Backend sponsors via Enoki and executes on Sui
+
 **Allowed Operations:**
 - place_bet
-- sell_shares
+- sell_shares  
 - claim_winnings
 
 **Rate Limits:**
 - Per user: 0.2 SUI/day
 - Global: 5 SUI/day
-- Per transaction: 0.2 SUI max
 
-**Example:**
-\`\`\`bash
-curl -X POST https://api.skepsis.live/api/enoki/sponsor-transaction \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "transactionKindBytes": [1, 2, 3, ...],
-    "userAddress": "0x57400cf44ad97dac479671bb58b96d444e87972f09a6e17fa9650a2c60fbc054"
-  }'
+**Example Frontend Code:**
+\`\`\`typescript
+const txb = new Transaction();
+// ... add your transaction commands
+const bytes = await txb.build({ client, onlyTransactionKind: true });
+const signature = await enoki.signPersonalMessage({ message: bytes });
+const jwt = enoki.getJwt();
+
+await fetch('/api/enoki/sponsor-transaction', {
+  method: 'POST',
+  body: JSON.stringify({
+    transactionKindBytes: Array.from(bytes),
+    userAddress: '0x...',
+    zkLoginJwt: jwt,
+    userSignature: signature
+  })
+});
 \`\`\`
     `,
   })
@@ -47,6 +61,8 @@ curl -X POST https://api.skepsis.live/api/enoki/sponsor-transaction \\
         value: {
           transactionKindBytes: [1, 2, 3, 4, 5],
           userAddress: '0x57400cf44ad97dac479671bb58b96d444e87972f09a6e17fa9650a2c60fbc054',
+          zkLoginJwt: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+          userSignature: 'base64_encoded_signature',
         },
       },
     },
@@ -64,7 +80,12 @@ curl -X POST https://api.skepsis.live/api/enoki/sponsor-transaction \\
   @ApiResponse({ status: 400, description: 'Invalid transaction or sponsorship failed' })
   @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async sponsorTransaction(@Body() dto: SponsorTransactionDto) {
-    return this.enokiService.sponsorTransaction(dto.transactionKindBytes, dto.userAddress);
+    return this.enokiService.sponsorTransaction(
+      dto.transactionKindBytes,
+      dto.userAddress,
+      dto.zkLoginJwt,
+      dto.userSignature,
+    );
   }
 
   /**

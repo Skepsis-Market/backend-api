@@ -20,8 +20,19 @@ export class EnokiService {
 
   /**
    * Sponsor a transaction using Enoki
+   * Following the correct flow from Enoki docs:
+   * 1. Frontend builds tx with onlyTransactionKind: true
+   * 2. Frontend sends transactionKindBytes + zkLoginJwt + userSignature
+   * 3. Backend calls Enoki to sponsor
+   * 4. Backend submits sponsor signature
+   * 5. Backend executes sponsored transaction
    */
-  async sponsorTransaction(transactionKindBytes: number[], userAddress: string) {
+  async sponsorTransaction(
+    transactionKindBytes: number[],
+    userAddress: string,
+    zkLoginJwt: string,
+    userSignature: string,
+  ) {
     // 1. Check user eligibility
     const eligible = await this.checkUserEligibility(userAddress);
     if (!eligible.eligible) {
@@ -41,25 +52,23 @@ export class EnokiService {
     }
 
     try {
-      // 3. Convert bytes array to Uint8Array
-      const txBytes = new Uint8Array(transactionKindBytes);
-
-      // 4. Call Enoki API to sponsor transaction
       const privateKey = this.configService.get<string>('ENOKI_PRIVATE_API_KEY');
       const network = this.configService.get<string>('SUI_NETWORK');
 
-      // Step 4a: Request sponsorship from Enoki
+      // Step 1: Request sponsorship from Enoki
+      // Include zkLogin JWT in header as per docs
       const sponsorResponse = await fetch(
         'https://api.enoki.mystenlabs.com/v1/transaction-blocks/sponsor',
         {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${privateKey}`,
+            'zklogin-jwt': zkLoginJwt,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             network: network,
-            transactionBlockKindBytes: Array.from(txBytes),
+            transactionBlockKindBytes: transactionKindBytes,
           }),
         }
       );
@@ -71,19 +80,39 @@ export class EnokiService {
 
       const { bytes, digest } = await sponsorResponse.json();
 
-      // 5. Execute sponsored transaction on Sui network
-      // Note: In production, you'd need to handle zkLogin signature here
-      // For now, assuming Enoki handles this internally
+      // Step 2: Submit user's signature and get sponsor-signed transaction
+      const signatureResponse = await fetch(
+        `https://api.enoki.mystenlabs.com/v1/transaction-blocks/sponsor/${digest}`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${privateKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            signature: userSignature,
+          }),
+        }
+      );
+
+      if (!signatureResponse.ok) {
+        const error = await signatureResponse.text();
+        throw new Error(`Enoki signature submission failed: ${error}`);
+      }
+
+      const sponsoredTxData = await signatureResponse.json();
+
+      // Step 3: Execute sponsored transaction on Sui network
       const result = await this.suiClient.executeTransactionBlock({
-        transactionBlock: bytes,
-        signature: [], // Placeholder - need zkLogin signature implementation
+        transactionBlock: sponsoredTxData.bytes,
+        signature: [userSignature, sponsoredTxData.signature],
         options: {
           showEffects: true,
           showEvents: true,
         },
       });
 
-      // 6. Track usage for rate limiting
+      // Track usage for rate limiting
       const gasUsed = result.effects?.gasUsed?.computationCost || '0';
       await this.trackSponsorshipUsage(userAddress, result.digest, gasUsed);
 

@@ -18,4 +18,20 @@ export class SponsorTransactionDto {
   @IsString()
   @IsNotEmpty()
   userAddress: string;
+
+  @ApiProperty({
+    description: 'zkLogin JWT token from Enoki (obtained after user signs in)',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+  })
+  @IsString()
+  @IsNotEmpty()
+  zkLoginJwt: string;
+
+  @ApiProperty({
+    description: 'User signature for the transaction bytes',
+    example: 'base64_encoded_signature',
+  })
+  @IsString()
+  @IsNotEmpty()
+  userSignature: string;
 }
