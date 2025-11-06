@@ -2,6 +2,7 @@ import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@ne
 import { ApiTags, ApiOperation, ApiSecurity, ApiResponse, ApiParam, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { MarketsService } from './markets.service';
 import { CreateMarketDto } from './dto/create-market.dto';
+import { UpdateMarketStatusDto } from './dto/update-market-status.dto';
 import { AdminGuard } from '../../common/guards/admin.guard';
 
 @ApiTags('Markets')
@@ -144,22 +145,48 @@ curl -X POST https://api.skepsis.live/api/markets \\
   /**
    * PATCH /api/markets/:marketId/status
    * Update market status to resolved or cancelled
-   * Body: { status: 'resolved' | 'cancelled', resolvedValue?: number }
    */
   @UseGuards(AdminGuard)
   @Patch(':marketId/status')
   @ApiSecurity('admin-key')
-  @ApiOperation({ summary: 'Update market status (Admin)', description: 'Resolve or cancel a market' })
+  @ApiOperation({ 
+    summary: 'Update market status (Admin)', 
+    description: 'Resolve or cancel a market. When resolving, provide the final resolved value.' 
+  })
   @ApiParam({ name: 'marketId', description: 'Market ID (Sui object ID)' })
+  @ApiBody({
+    type: UpdateMarketStatusDto,
+    examples: {
+      resolve: {
+        summary: 'Resolve Market',
+        description: 'Resolve a market with final value',
+        value: {
+          status: 'resolved',
+          resolvedValue: 108500
+        }
+      },
+      cancel: {
+        summary: 'Cancel Market',
+        description: 'Cancel a market',
+        value: {
+          status: 'cancelled'
+        }
+      }
+    }
+  })
   @ApiResponse({ status: 200, description: 'Market status updated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid status or missing resolvedValue' })
   @ApiResponse({ status: 401, description: 'Invalid or missing admin credentials' })
   @ApiResponse({ status: 404, description: 'Market not found' })
   async updateMarketStatus(
     @Param('marketId') marketId: string,
-    @Body('status') status: string,
-    @Body('resolvedValue') resolvedValue?: number,
+    @Body() updateStatusDto: UpdateMarketStatusDto,
   ) {
-    return this.marketsService.updateMarketStatus(marketId, status, resolvedValue);
+    return this.marketsService.updateMarketStatus(
+      marketId, 
+      updateStatusDto.status, 
+      updateStatusDto.resolvedValue
+    );
   }
 
   /**
