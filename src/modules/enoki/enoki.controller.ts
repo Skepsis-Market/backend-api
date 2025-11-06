@@ -11,80 +11,87 @@ export class EnokiController {
 
   /**
    * POST /api/enoki/sponsor-transaction
-   * Sponsor a transaction using Enoki
+   * Create a sponsored transaction (Step 1 of 2)
    */
   @Post('sponsor-transaction')
   @ApiOperation({
-    summary: 'Sponsor transaction',
-    description: `Sponsor a user's transaction (gas fees paid by backend).
+    summary: 'Create sponsored transaction',
+    description: `Step 1: Create a sponsored transaction that frontend can sign.
     
-**Flow:**
+**New Flow (Official Enoki Pattern):**
 1. Frontend builds transaction with \`onlyTransactionKind: true\`
-2. Frontend signs the transaction bytes with zkLogin
-3. Frontend sends: transactionKindBytes + userSignature + zkLoginJwt
-4. Backend sponsors via Enoki and executes on Sui
-
-**Allowed Operations:**
-- place_bet
-- sell_shares  
-- claim_winnings
-
-**Rate Limits:**
-- Per user: 0.2 SUI/day
-- Global: 5 SUI/day
+2. Frontend calls this endpoint with transactionKindBytes + userAddress
+3. Backend creates sponsored transaction via Enoki SDK
+4. Returns sponsored bytes + digest for frontend to sign
+5. Frontend signs the sponsored bytes
+6. Frontend calls /execute-transaction with digest + signature
 
 **Example Frontend Code:**
 \`\`\`typescript
+// Step 1: Build transaction
 const txb = new Transaction();
 // ... add your transaction commands
 const bytes = await txb.build({ client, onlyTransactionKind: true });
-const signature = await enoki.signPersonalMessage({ message: bytes });
-const jwt = enoki.getJwt();
 
-await fetch('/api/enoki/sponsor-transaction', {
+// Step 2: Request sponsorship
+const sponsorRes = await fetch('/api/enoki/sponsor-transaction', {
   method: 'POST',
   body: JSON.stringify({
     transactionKindBytes: Array.from(bytes),
-    userAddress: '0x...',
-    zkLoginJwt: jwt,
-    userSignature: signature
+    userAddress: currentAccount.address
   })
+});
+const { bytes: sponsoredBytes, digest } = await sponsorRes.json();
+
+// Step 3: Sign sponsored transaction
+const { signature } = await signTransaction({ 
+  transaction: Transaction.from(sponsoredBytes) 
+});
+
+// Step 4: Execute
+await fetch('/api/enoki/execute-transaction', {
+  method: 'POST',
+  body: JSON.stringify({ digest, signature })
 });
 \`\`\`
     `,
   })
   @ApiBody({
-    type: SponsorTransactionDto,
-    examples: {
-      placeBet: {
-        summary: 'Place Bet Transaction',
-        value: {
-          transactionKindBytes: [1, 2, 3, 4, 5],
-          userAddress: '0x57400cf44ad97dac479671bb58b96d444e87972f09a6e17fa9650a2c60fbc054',
-          zkLoginJwt: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-          userSignature: 'base64_encoded_signature',
+    schema: {
+      type: 'object',
+      properties: {
+        transactionKindBytes: {
+          type: 'array',
+          items: { type: 'number' },
+          description: 'Transaction bytes from frontend (serialized with onlyTransactionKind: true)',
+          example: [1, 2, 3, 4, 5],
+        },
+        userAddress: {
+          type: 'string',
+          description: 'Sui wallet address of the user',
+          example: '0x57400cf44ad97dac479671bb58b96d444e87972f09a6e17fa9650a2c60fbc054',
         },
       },
+      required: ['transactionKindBytes', 'userAddress'],
     },
   })
   @ApiResponse({
     status: 200,
-    description: 'Transaction sponsored successfully',
+    description: 'Sponsored transaction created - ready for signing',
     schema: {
       example: {
         success: true,
+        bytes: 'base64_sponsored_transaction_bytes',
         digest: '4utQS71inTmTV5rZKB83oRLi6Tro2QTUyWciSTbPauak',
       },
     },
   })
   @ApiResponse({ status: 400, description: 'Invalid transaction or sponsorship failed' })
   @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
-  async sponsorTransaction(@Body() dto: SponsorTransactionDto) {
+  async sponsorTransaction(@Body() body: { transactionKindBytes: number[]; userAddress: string }) {
     return this.enokiService.sponsorTransaction(
-      dto.transactionKindBytes,
-      dto.userAddress,
-      dto.zkLoginJwt,
-      dto.userSignature,
+      body.transactionKindBytes,
+      body.userAddress,
     );
   }
 
@@ -133,5 +140,69 @@ curl -X POST https://api.skepsis.live/api/enoki/check-eligibility \\
   })
   async checkEligibility(@Body() dto: CheckEligibilityDto) {
     return this.enokiService.checkUserEligibility(dto.userAddress);
+  }
+
+  /**
+   * POST /api/enoki/execute-transaction
+   * Execute a sponsored transaction with user signature
+   */
+  @Post('execute-transaction')
+  @ApiOperation({
+    summary: 'Execute sponsored transaction',
+    description: `Execute a previously sponsored transaction with user signature.
+    
+**Flow:**
+1. Frontend calls /sponsor-transaction to get sponsored bytes
+2. Frontend signs the sponsored bytes with wallet
+3. Frontend calls this endpoint with digest + signature
+4. Backend executes the transaction on Sui
+
+**Example:**
+\`\`\`typescript
+// Step 2: Sign sponsored transaction
+const { signature } = await signTransaction({ transaction: sponsoredTx });
+
+// Step 3: Execute
+await fetch('/api/enoki/execute-transaction', {
+  method: 'POST',
+  body: JSON.stringify({
+    digest: sponsoredTx.digest,
+    signature: signature
+  })
+});
+\`\`\`
+    `,
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        digest: {
+          type: 'string',
+          description: 'Transaction digest from sponsor-transaction call',
+          example: '4utQS71inTmTV5rZKB83oRLi6Tro2QTUyWciSTbPauak',
+        },
+        signature: {
+          type: 'string',
+          description: 'User signature of the sponsored transaction bytes',
+          example: 'base64_encoded_signature',
+        },
+      },
+      required: ['digest', 'signature'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Transaction executed successfully',
+    schema: {
+      example: {
+        success: true,
+        digest: '4utQS71inTmTV5rZKB83oRLi6Tro2QTUyWciSTbPauak',
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid digest or signature' })
+  async executeTransaction(@Body() body: { digest: string; signature: string }) {
+    return this.enokiService.executeTransaction(body.digest, body.signature);
   }
 }

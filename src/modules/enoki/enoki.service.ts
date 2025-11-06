@@ -4,10 +4,12 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Sponsorship, SponsorshipDocument } from './schemas/sponsorship.schema';
 import { SuiClient } from '@mysten/sui/client';
+import { EnokiClient } from '@mysten/enoki';
 
 @Injectable()
 export class EnokiService {
   private suiClient: SuiClient;
+  private enokiClient: EnokiClient;
 
   constructor(
     @InjectModel(Sponsorship.name) private sponsorshipModel: Model<SponsorshipDocument>,
@@ -16,22 +18,19 @@ export class EnokiService {
     this.suiClient = new SuiClient({
       url: this.configService.get<string>('SUI_FULLNODE_URL'),
     });
+    
+    this.enokiClient = new EnokiClient({
+      apiKey: this.configService.get<string>('ENOKI_PRIVATE_API_KEY'),
+    });
   }
 
   /**
-   * Sponsor a transaction using Enoki
-   * Following the correct flow from Enoki docs:
-   * 1. Frontend builds tx with onlyTransactionKind: true
-   * 2. Frontend sends transactionKindBytes + zkLoginJwt + userSignature
-   * 3. Backend calls Enoki to sponsor
-   * 4. Backend submits sponsor signature
-   * 5. Backend executes sponsored transaction
+   * Step 1: Create sponsored transaction (Official Enoki SDK pattern)
+   * Returns sponsored transaction bytes for frontend to sign
    */
   async sponsorTransaction(
     transactionKindBytes: number[],
     userAddress: string,
-    zkLoginJwt: string,
-    userSignature: string,
   ) {
     // 1. Check user eligibility
     const eligible = await this.checkUserEligibility(userAddress);
@@ -52,71 +51,66 @@ export class EnokiService {
     }
 
     try {
-      const privateKey = this.configService.get<string>('ENOKI_PRIVATE_API_KEY');
-      const network = this.configService.get<string>('SUI_NETWORK');
-
-      // Step 1: Request sponsorship from Enoki
-      // Include zkLogin JWT in header as per docs
-      const sponsorResponse = await fetch(
-        'https://api.enoki.mystenlabs.com/v1/transaction-blocks/sponsor',
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${privateKey}`,
-            'zklogin-jwt': zkLoginJwt,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            network: network,
-            transactionBlockKindBytes: transactionKindBytes,
-          }),
-        }
-      );
-
-      if (!sponsorResponse.ok) {
-        const error = await sponsorResponse.text();
-        throw new Error(`Enoki sponsorship request failed: ${sponsorResponse.status} ${error}`);
-      }
-
-      const sponsorData = await sponsorResponse.json();
-      const { bytes, digest } = sponsorData.data || sponsorData;
-
-      // Step 2: Submit user's signature and get sponsor-signed transaction
-      const signatureResponse = await fetch(
-        `https://api.enoki.mystenlabs.com/v1/transaction-blocks/sponsor/${digest}`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${privateKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            signature: userSignature,
-          }),
-        }
-      );
-
-      if (!signatureResponse.ok) {
-        const error = await signatureResponse.text();
-        throw new Error(`Enoki signature submission failed: ${signatureResponse.status} ${error}`);
-      }
-
-      const signatureData = await signatureResponse.json();
-      const sponsoredTxData = signatureData.data || signatureData;
-
-      // Step 3: Execute sponsored transaction on Sui network
-      const result = await this.suiClient.executeTransactionBlock({
-        transactionBlock: sponsoredTxData.bytes || bytes,
-        signature: sponsoredTxData.signature || [userSignature, sponsoredTxData.sponsorSignature],
-        options: {
-          showEffects: true,
-          showEvents: true,
-        },
+      console.log('Creating sponsored transaction for user:', userAddress);
+      
+      // Convert number array to base64 string for Enoki SDK
+      const transactionBytes = new Uint8Array(transactionKindBytes);
+      const base64Bytes = Buffer.from(transactionBytes).toString('base64');
+      
+      // Use Enoki SDK to create sponsored transaction
+      const network = this.configService.get<string>('SUI_NETWORK') || 'testnet';
+      const sponsoredTx = await this.enokiClient.createSponsoredTransaction({
+        network: network as 'testnet' | 'mainnet' | 'devnet',
+        transactionKindBytes: base64Bytes,
+        sender: userAddress,
       });
 
+      console.log('Sponsored transaction created:', {
+        digest: sponsoredTx.digest,
+        bytesLength: sponsoredTx.bytes.length
+      });
+
+      return {
+        success: true,
+        bytes: sponsoredTx.bytes,
+        digest: sponsoredTx.digest,
+      };
+
+    } catch (error) {
+      console.error('Sponsorship creation error:', error);
+      throw new BadRequestException(error.message || 'Failed to create sponsored transaction');
+    }
+  }
+
+  /**
+   * Step 2: Execute sponsored transaction with user signature
+   * Called after frontend signs the sponsored transaction bytes
+   */
+  async executeTransaction(digest: string, signature: string) {
+    try {
+      console.log('Executing sponsored transaction:', { digest, signature: signature.substring(0, 20) + '...' });
+
+      // Use Enoki SDK to execute sponsored transaction
+      const result = await this.enokiClient.executeSponsoredTransaction({
+        digest,
+        signature,
+      });
+
+      console.log('Transaction executed successfully:', result.digest);
+
       // Track usage for rate limiting
-      const gasUsed = result.effects?.gasUsed?.computationCost || '0';
-      await this.trackSponsorshipUsage(userAddress, result.digest, gasUsed);
+      // Note: We'll get gas usage from the transaction effects
+      const effects = await this.suiClient.getTransactionBlock({
+        digest: result.digest,
+        options: { showEffects: true }
+      });
+      
+      const gasUsed = effects.effects?.gasUsed?.computationCost || '0';
+      const userAddress = effects.transaction?.data?.sender || '';
+      
+      if (userAddress) {
+        await this.trackSponsorshipUsage(userAddress, result.digest, gasUsed);
+      }
 
       return {
         success: true,
@@ -124,16 +118,8 @@ export class EnokiService {
       };
 
     } catch (error) {
-      console.error('Sponsorship error:', error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        userAddress,
-        zkLoginJwt: zkLoginJwt ? 'present' : 'missing',
-        userSignature: userSignature ? 'present' : 'missing',
-        transactionKindBytes: transactionKindBytes ? `length: ${transactionKindBytes.length}` : 'missing'
-      });
-      throw new BadRequestException(error.message || 'Transaction sponsorship failed');
+      console.error('Transaction execution error:', error);
+      throw new BadRequestException(error.message || 'Failed to execute sponsored transaction');
     }
   }
 
