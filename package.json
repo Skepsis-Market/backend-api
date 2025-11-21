@@ -12,9 +12,13 @@
     "dev": "nodemon --exec ts-node src/main.ts",
     "script:generate-codes": "ts-node src/scripts/generate-codes.ts",
     "script:list-waitlist": "ts-node src/scripts/list-waitlist.ts",
-    "script:extract-wallets": "ts-node src/scripts/extract-wallets.ts"
+    "script:extract-wallets": "ts-node src/scripts/extract-wallets.ts",
+    "script:update-market-formatting": "ts-node src/scripts/update-market-formatting.ts",
+    "script:add-market-images": "ts-node src/scripts/add-market-images.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.927.0",
+    "@aws-sdk/lib-storage": "^3.927.0",
     "@mysten/enoki": "^0.12.10",
     "@mysten/sui": "^1.44.0",
     "@nestjs/common": "^11.1.6",
@@ -23,13 +27,17 @@
     "@nestjs/mongoose": "^11.0.3",
     "@nestjs/platform-express": "^11.1.6",
     "@nestjs/swagger": "^11.2.1",
+    "@types/multer": "^2.0.0",
+    "@types/uuid": "^10.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "dotenv": "^17.2.3",
     "mongoose": "^8.19.1",
+    "multer": "^2.0.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.10",

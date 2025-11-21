@@ -37,6 +37,18 @@ class Configuration {
   @Prop({ required: true })
   valueUnit: string;
 
+  @Prop({ default: 'currency' })
+  valueType?: string; // 'currency', 'percentage', 'temperature', 'score', 'decimal'
+
+  @Prop({ default: '$' })
+  valuePrefix?: string; // '$' for currency, '' for others
+
+  @Prop({ default: '' })
+  valueSuffix?: string; // '%' for percentage, '°C' for temperature, etc.
+
+  @Prop({ default: true })
+  useKSuffix?: boolean; // true for large currency (>= 1000), false for small values
+
   @Prop({ required: true })
   biddingDeadline: number;
 
@@ -48,6 +60,12 @@ class Configuration {
 
   @Prop({ required: true })
   usdcType: string;
+
+  @Prop()
+  marketImage?: string; // S3 URL for the market image
+
+  @Prop()
+  marketImageKey?: string; // S3 object key (for deletion/management)
 }
 
 @Schema({ collection: 'markets', timestamps: true })

@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { MarketsController } from './markets.controller';
 import { MarketsService } from './markets.service';
 import { Market, MarketSchema } from './schemas/market.schema';
+import { S3UploadService } from '../../common/services/s3-upload.service';
 
 @Module({
   imports: [
@@ -11,7 +12,7 @@ import { Market, MarketSchema } from './schemas/market.schema';
     ]),
   ],
   controllers: [MarketsController],
-  providers: [MarketsService],
+  providers: [MarketsService, S3UploadService],
   exports: [MarketsService],
 })
 export class MarketsModule {}

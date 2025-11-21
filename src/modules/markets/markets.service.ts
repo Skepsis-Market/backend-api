@@ -28,6 +28,23 @@ export class MarketsService {
       );
     }
 
+    // Set default value formatting if not provided
+    if (!createMarketDto.configuration.valueType) {
+      createMarketDto.configuration.valueType = 'currency';
+    }
+    if (createMarketDto.configuration.valuePrefix === undefined) {
+      createMarketDto.configuration.valuePrefix = '$';
+    }
+    if (createMarketDto.configuration.valueSuffix === undefined) {
+      createMarketDto.configuration.valueSuffix = '';
+    }
+    if (createMarketDto.configuration.useKSuffix === undefined) {
+      // Smart default: use K suffix only for large values (>= 1000)
+      const minDisplay = createMarketDto.configuration.minValue / Math.pow(10, createMarketDto.configuration.decimalPrecision);
+      const maxDisplay = createMarketDto.configuration.maxValue / Math.pow(10, createMarketDto.configuration.decimalPrecision);
+      createMarketDto.configuration.useKSuffix = (minDisplay >= 1000 || maxDisplay >= 1000);
+    }
+
     // Create market with active status
     const market = new this.marketModel({
       ...createMarketDto,

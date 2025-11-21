@@ -52,6 +52,7 @@ export class EnokiService {
 
     try {
       console.log('Creating sponsored transaction for user:', userAddress);
+      console.log('Transaction bytes length:', transactionKindBytes.length);
       
       // Convert number array to base64 string for Enoki SDK
       const transactionBytes = new Uint8Array(transactionKindBytes);
@@ -59,6 +60,9 @@ export class EnokiService {
       
       // Use Enoki SDK to create sponsored transaction
       const network = this.configService.get<string>('SUI_NETWORK') || 'testnet';
+      console.log('Network being used:', network);
+      console.log('API Key prefix:', this.configService.get<string>('ENOKI_PRIVATE_API_KEY')?.substring(0, 10) + '...');
+      
       const sponsoredTx = await this.enokiClient.createSponsoredTransaction({
         network: network as 'testnet' | 'mainnet' | 'devnet',
         transactionKindBytes: base64Bytes,
@@ -78,6 +82,12 @@ export class EnokiService {
 
     } catch (error) {
       console.error('Sponsorship creation error:', error);
+      
+      // Log more details for debugging
+      if (error.errors) {
+        console.error('Enoki error details:', JSON.stringify(error.errors, null, 2));
+      }
+      
       throw new BadRequestException(error.message || 'Failed to create sponsored transaction');
     }
   }

@@ -52,6 +52,60 @@ class ConfigurationDto {
   @IsNotEmpty()
   valueUnit: string;
 
+  @ApiProperty({ 
+    example: 'https://skepsis-markets.s3.us-east-1.amazonaws.com/markets/uuid.jpg',
+    description: 'S3 URL of the market image',
+    required: false
+  })
+  @IsUrl()
+  @IsOptional()
+  marketImage?: string;
+
+  @ApiProperty({ 
+    example: 'markets/uuid.jpg',
+    description: 'S3 object key for the market image',
+    required: false
+  })
+  @IsString()
+  @IsOptional()
+  marketImageKey?: string;
+
+  @ApiProperty({ 
+    example: 'currency',
+    description: 'Type of value: currency, percentage, temperature, score, decimal',
+    required: false,
+    enum: ['currency', 'percentage', 'temperature', 'score', 'decimal']
+  })
+  @IsString()
+  @IsOptional()
+  valueType?: string;
+
+  @ApiProperty({ 
+    example: '$',
+    description: 'Prefix before value (e.g., $ for currency)',
+    required: false
+  })
+  @IsString()
+  @IsOptional()
+  valuePrefix?: string;
+
+  @ApiProperty({ 
+    example: '',
+    description: 'Suffix after value (e.g., % for percentage, °C for temperature)',
+    required: false
+  })
+  @IsString()
+  @IsOptional()
+  valueSuffix?: string;
+
+  @ApiProperty({ 
+    example: true,
+    description: 'Whether to use K suffix for large currency values (>= 1000). Set false for small values like $1.50',
+    required: false
+  })
+  @IsOptional()
+  useKSuffix?: boolean;
+
   @ApiProperty({ example: 1762286400000 })
   @IsNumber()
   biddingDeadline: number;
