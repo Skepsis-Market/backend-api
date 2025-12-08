@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsNotEmpty, IsOptional, IsUrl } from 'class-validator';
+import { IsString, IsNumber, IsNotEmpty, IsOptional, IsUrl, IsIn } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 class ConfigurationDto {
@@ -106,6 +106,17 @@ class ConfigurationDto {
   @IsOptional()
   useKSuffix?: boolean;
 
+  @ApiProperty({ 
+    example: 'weekly',
+    description: 'Frequency of the market: hourly, weekly, monthly',
+    required: false,
+    enum: ['hourly', 'weekly', 'monthly']
+  })
+  @IsString()
+  @IsOptional()
+  @IsIn(['hourly', 'weekly', 'monthly'])
+  frequency?: string;
+
   @ApiProperty({ example: 1762286400000 })
   @IsNumber()
   biddingDeadline: number;
@@ -184,4 +195,31 @@ export class CreateMarketDto {
   @IsString()
   @IsOptional()
   livePrice?: string;
+
+  // Series-related fields (for recurring markets)
+  @ApiProperty({ 
+    example: 'series_btc_hourly',
+    description: 'Series ID if this market is part of a recurring series',
+    required: false 
+  })
+  @IsString()
+  @IsOptional()
+  seriesId?: string;
+
+  @ApiProperty({ 
+    example: 42,
+    description: 'Round number within the series',
+    required: false 
+  })
+  @IsNumber()
+  @IsOptional()
+  roundNumber?: number;
+
+  @ApiProperty({ 
+    example: false,
+    description: 'Whether this is the current active round in the series',
+    required: false 
+  })
+  @IsOptional()
+  isSeriesMaster?: boolean;
 }

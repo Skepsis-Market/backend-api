@@ -365,6 +365,19 @@ curl -X POST https://api.skepsis.live/api/markets \\
   }
 
   /**
+   * GET /api/markets/by-id/:id
+   * Get single market details by ID
+   */
+  @Get('by-id/:id')
+  @ApiOperation({ summary: 'Get market by ID', description: 'Get market details by Sui object ID' })
+  @ApiParam({ name: 'id', description: 'Market ID (Sui object ID)' })
+  @ApiResponse({ status: 200, description: 'Market retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Market not found' })
+  async getMarketById(@Param('id') id: string) {
+    return this.marketsService.getMarket(id);
+  }
+
+  /**
    * GET /api/markets/:marketId
    * Get single market details by ID
    */

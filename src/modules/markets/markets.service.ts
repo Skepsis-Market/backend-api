@@ -177,21 +177,15 @@ export class MarketsService {
     if (filters.type) {
       query.marketType = filters.type;
     }
-    if (filters.status) {
-      query.status = filters.status;
-    }
+    // Don't filter by status in the query - we'll filter after calculating real-time status
 
     const markets = await this.marketModel
       .find(query)
       .sort({ createdAt: -1 })
-      .skip(filters.offset)
-      .limit(filters.limit)
       .lean();
 
-    const total = await this.marketModel.countDocuments(query);
-
     // Calculate real-time status and format response
-    const formattedMarkets = markets.map((market) => {
+    let formattedMarkets = markets.map((market) => {
       const calculatedStatus = this.calculateMarketStatus(market as Market);
       const marketUrl = market.configuration.marketUrl || 
         this.generateMarketUrl(market.configuration.marketName, market.marketId);
@@ -210,8 +204,17 @@ export class MarketsService {
       };
     });
 
+    // Filter by calculated status if status filter is provided
+    if (filters.status) {
+      formattedMarkets = formattedMarkets.filter(m => m.status === filters.status);
+    }
+
+    // Apply pagination after filtering
+    const total = formattedMarkets.length;
+    const paginatedMarkets = formattedMarkets.slice(filters.offset, filters.offset + filters.limit);
+
     return {
-      markets: formattedMarkets,
+      markets: paginatedMarkets,
       pagination: {
         total,
         limit: filters.limit,

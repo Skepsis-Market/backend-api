@@ -49,6 +49,10 @@ class Configuration {
   @Prop({ default: true })
   useKSuffix?: boolean; // true for large currency (>= 1000), false for small values
 
+  @Prop({ required: false })
+  frequency?: string; // 'hourly', 'weekly', 'monthly' or empty
+
+
   @Prop({ required: true })
   biddingDeadline: number;
 
@@ -108,6 +112,16 @@ export class Market {
 
   @Prop({ default: 'active' })
   status: string; // active, resolved, expired
+
+  // Series-related fields (for recurring markets)
+  @Prop({ required: false })
+  seriesId?: string; // Links to market_series collection: "series_btc_hourly"
+
+  @Prop({ required: false })
+  roundNumber?: number; // Round number within the series: 42
+
+  @Prop({ default: false })
+  isSeriesMaster?: boolean; // Helper flag to identify if this is the current active round
 }
 
 export const MarketSchema = SchemaFactory.createForClass(Market);
@@ -116,6 +130,8 @@ export const MarketSchema = SchemaFactory.createForClass(Market);
 MarketSchema.index({ marketId: 1 }, { unique: true });
 MarketSchema.index({ 'configuration.marketUrl': 1 }, { unique: true });
 MarketSchema.index({ 'configuration.category': 1 });
+MarketSchema.index({ seriesId: 1 }); // Fast lookup for all rounds in a series
+MarketSchema.index({ seriesId: 1, roundNumber: -1 }); // Fast sorted lookup for series history
 MarketSchema.index({ marketType: 1 });
 MarketSchema.index({ status: 1 });
 MarketSchema.index({ createdAt: -1 });

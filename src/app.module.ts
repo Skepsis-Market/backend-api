@@ -5,6 +5,7 @@ import { WaitlistModule } from './modules/waitlist/waitlist.module';
 import { PortfolioModule } from './modules/portfolio/portfolio.module';
 import { MarketsModule } from './modules/markets/markets.module';
 import { EnokiModule } from './modules/enoki/enoki.module';
+import { SeriesModule } from './modules/series/series.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { EnokiModule } from './modules/enoki/enoki.module';
     PortfolioModule,
     MarketsModule,
     EnokiModule,
+    SeriesModule,
   ],
 })
 export class AppModule {}
