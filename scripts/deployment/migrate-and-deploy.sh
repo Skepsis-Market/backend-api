@@ -124,8 +124,8 @@ echo ""
 # ================================================
 log "Phase 2: Running database migrations..."
 
-# Create migration script
-MIGRATION_SCRIPT="/tmp/migration-script-$(date +%Y%m%d-%H%M%S).js"
+# Create migration script in app directory (so it has access to node_modules)
+MIGRATION_SCRIPT="$APP_DIR/migration-temp.js"
 
 cat > $MIGRATION_SCRIPT << 'MIGRATION_EOF'
 // MongoDB Migration Script
@@ -276,20 +276,23 @@ migrate()
     });
 MIGRATION_EOF
 
-# Run migration
+# Run migration from app directory (has access to node_modules)
 log "Executing migration script..."
+cd $APP_DIR
 MONGODB_URI="$MONGODB_URI" node $MIGRATION_SCRIPT
 
 if [ $? -eq 0 ]; then
     log "✅ Database migrations completed successfully"
+    # Cleanup migration script
+    rm -f $MIGRATION_SCRIPT
 else
     error "Database migration failed! Check $LOG_FILE for details"
     error "Rollback may be required"
+    # Cleanup migration script even on failure
+    rm -f $MIGRATION_SCRIPT
     exit 1
 fi
 
-# Cleanup migration script
-rm $MIGRATION_SCRIPT
 echo ""
 
 # ================================================
