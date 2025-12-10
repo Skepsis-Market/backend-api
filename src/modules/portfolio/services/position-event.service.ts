@@ -87,9 +87,29 @@ export class PositionEventService {
       // For old events, it will be null
       const realizedPnl = event.realized_pnl_delta || null;
 
+      // Derive display action to fix potential data labeling issues and clarify claims
+      const sharesDelta = Number(event.shares_delta);
+      const usdcDelta = Number(event.usdc_delta);
+      
+      let derivedType = event.event_type;
+      
+      // Safety check: If shares increased, it's a BUY (unless it's a claim/resolution)
+      if (sharesDelta > 0 && event.event_type === 'SHARES_SOLD') derivedType = 'SHARES_PURCHASED';
+      // If shares decreased and it's not a claim, it's a SELL
+      if (sharesDelta < 0 && event.event_type === 'SHARES_PURCHASED') derivedType = 'SHARES_SOLD';
+
+      let displayAction = 'UNKNOWN';
+      if (derivedType === 'SHARES_PURCHASED') displayAction = 'BUY';
+      else if (derivedType === 'SHARES_SOLD') displayAction = 'SELL';
+      else if (derivedType === 'REWARDS_CLAIMED') {
+         // If we received money, it's a CLAIM (Win). If 0, it's a Loss resolution.
+         displayAction = usdcDelta > 0 ? 'CLAIM' : 'RESOLVED_LOSS';
+      }
+
       return {
         timestamp: event.timestamp,
-        event_type: event.event_type,
+        event_type: derivedType, // Return corrected type
+        display_action: displayAction, // New friendly field
         market_id: event.market_id,
         market_name: marketMap.get(event.market_id)?.configuration?.marketName || 'Unknown Market',
         range_lower: event.range_lower,
@@ -142,17 +162,34 @@ export class PositionEventService {
     const totalCount = await this.positionEventModel.countDocuments(query);
 
     return {
-      events: events.map(event => ({
-        timestamp: event.timestamp,
-        event_type: event.event_type,
-        user_address: event.user_address,
-        range_lower: event.range_lower,
-        range_upper: event.range_upper,
-        shares_delta: event.shares_delta,
-        usdc_delta: event.usdc_delta,
-        price_per_share: event.price_per_share,
-        tx_digest: event.tx_digest,
-      })),
+      events: events.map(event => {
+        const sharesDelta = Number(event.shares_delta);
+        const usdcDelta = Number(event.usdc_delta);
+        
+        let derivedType = event.event_type;
+        if (sharesDelta > 0 && event.event_type === 'SHARES_SOLD') derivedType = 'SHARES_PURCHASED';
+        if (sharesDelta < 0 && event.event_type === 'SHARES_PURCHASED') derivedType = 'SHARES_SOLD';
+
+        let displayAction = 'UNKNOWN';
+        if (derivedType === 'SHARES_PURCHASED') displayAction = 'BUY';
+        else if (derivedType === 'SHARES_SOLD') displayAction = 'SELL';
+        else if (derivedType === 'REWARDS_CLAIMED') {
+           displayAction = usdcDelta > 0 ? 'CLAIM' : 'RESOLVED_LOSS';
+        }
+
+        return {
+          timestamp: event.timestamp,
+          event_type: derivedType,
+          display_action: displayAction,
+          user_address: event.user_address,
+          range_lower: event.range_lower,
+          range_upper: event.range_upper,
+          shares_delta: event.shares_delta,
+          usdc_delta: event.usdc_delta,
+          price_per_share: event.price_per_share,
+          tx_digest: event.tx_digest,
+        };
+      }),
       total_count: totalCount,
       metadata: {
         decimals: 6,

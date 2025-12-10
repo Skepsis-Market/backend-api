@@ -46,25 +46,25 @@ export class UserPositionService {
     // Build query
     const query: any = { user_address: userAddress };
     
-    if (status === 'active') {
-      query.is_active = true;
-    } else if (status === 'closed') {
-      query.is_active = false;
-    }
-    
     if (marketId) {
       query.market_id = marketId;
     }
+
+    // If filtering by status, we need to be careful.
+    // "Active" for UI means:
+    // 1. is_active = true (Market open)
+    // 2. OR (Market resolved AND User is winner AND Has not claimed)
+    // Since we can't easily query (2) without joining market data, 
+    // we'll fetch more and filter in memory if status is specified.
+    
+    const fetchLimit = status === 'all' ? limit : 1000; // Fetch more for in-memory filtering
 
     // Get positions
     const positions = await this.userPositionModel
       .find(query)
       .sort({ last_updated_at: -1 })
-      .skip(offset)
-      .limit(limit)
+      .limit(fetchLimit)
       .lean();
-
-    const totalCount = await this.userPositionModel.countDocuments(query);
 
     // Get market details for each position
     const marketIds = [...new Set(positions.map(p => p.market_id))];
@@ -75,7 +75,7 @@ export class UserPositionService {
     const marketMap = new Map(markets.map(m => [m.marketId, m]));
 
     // Format positions with market data
-    const formattedPositions = positions.map(pos => {
+    let formattedPositions = positions.map(pos => {
       const market = marketMap.get(pos.market_id);
       const marketStatus = market ? this.calculateMarketStatus(market) : 'UNKNOWN';
       
@@ -97,6 +97,11 @@ export class UserPositionService {
         isWinner = market.resolvedValue >= pos.range_lower && market.resolvedValue <= pos.range_upper;
       }
 
+      // Determine UI Status
+      // Active if: DB says active OR (Resolved AND Winner AND Has Shares/Unclaimed)
+      const hasShares = Number(pos.total_shares) > 0;
+      const isUiActive = pos.is_active || (isResolved && isWinner && hasShares);
+
       return {
         market_id: pos.market_id,
         market_name: market?.configuration?.marketName || 'Unknown Market',
@@ -113,12 +118,23 @@ export class UserPositionService {
         roi_percent: roiPercent,
         first_purchase_at: pos.first_purchase_at,
         last_updated_at: pos.last_updated_at,
-        is_active: pos.is_active,
+        is_active: isUiActive, // Use calculated UI status
         resolved_value: isResolved ? String(market?.resolvedValue || 0) : null,
         is_winner: isWinner,
         close_reason: pos.close_reason || null,
       };
     });
+
+    // Apply Status Filter in Memory
+    if (status === 'active') {
+      formattedPositions = formattedPositions.filter(p => p.is_active);
+    } else if (status === 'closed') {
+      formattedPositions = formattedPositions.filter(p => !p.is_active);
+    }
+
+    // Apply Pagination in Memory
+    const totalCount = formattedPositions.length;
+    formattedPositions = formattedPositions.slice(offset, offset + limit);
 
     // Calculate summary
     const allPositions = await this.userPositionModel
