@@ -84,8 +84,9 @@ async function migrate() {
     console.log('📋 Migration 2: User positions PnL fields');
     console.log('─────────────────────────────────────────');
     
+    let positionsCount = 0;
     try {
-        const positionsCount = await db.collection('user_positions').countDocuments();
+        positionsCount = await db.collection('user_positions').countDocuments();
         console.log(`Total user positions: ${positionsCount}`);
         
         // Add unrealized_pnl field to existing positions
@@ -120,8 +121,9 @@ async function migrate() {
     console.log('📋 Migration 3: Position events realized PnL');
     console.log('─────────────────────────────────────────');
     
+    let eventsCount = 0;
     try {
-        const eventsCount = await db.collection('position_events').countDocuments();
+        eventsCount = await db.collection('position_events').countDocuments();
         console.log(`Total position events: ${eventsCount}`);
         
         // realized_pnl_delta is optional, no migration needed
@@ -158,16 +160,16 @@ async function migrate() {
     console.log(`   Email index exists: ${hasEmailIndex ? '✅' : '❌'}`);
     console.log(`   Old contact index removed: ${!hasOldContactIndex ? '✅' : '⚠️  Still exists'}`);
     
-    // Check field presence
+    // Check field presence (recount to avoid scope issues)
+    const positionsTotal = await db.collection('user_positions').countDocuments();
+    const waitlistTotal = await db.collection('waitlist').countDocuments();
+    
     const withUnrealizedPnl = await db.collection('user_positions').countDocuments({
         unrealized_pnl: { $exists: true }
     });
     const withNewsletter = await db.collection('waitlist').countDocuments({
         newsletter_consent: { $exists: true }
     });
-    
-    const positionsTotal = await db.collection('user_positions').countDocuments();
-    const waitlistTotal = await db.collection('waitlist').countDocuments();
     
     console.log(`   Positions with unrealized_pnl: ${withUnrealizedPnl} / ${positionsTotal}`);
     console.log(`   Waitlist with newsletter_consent: ${withNewsletter} / ${waitlistTotal}`);

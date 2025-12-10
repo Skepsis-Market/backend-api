@@ -195,8 +195,9 @@ async function migrate() {
     // ================================================
     console.log('📋 Migration 2: User positions PnL fields...');
     
+    let positionsCount = 0;
     try {
-        const positionsCount = await db.collection('user_positions').countDocuments();
+        positionsCount = await db.collection('user_positions').countDocuments();
         console.log(`   Total user positions: ${positionsCount}`);
         
         // Add unrealized_pnl field to existing positions
@@ -222,8 +223,9 @@ async function migrate() {
     // ================================================
     console.log('📋 Migration 3: Position events realized PnL...');
     
+    let eventsCount = 0;
     try {
-        const eventsCount = await db.collection('position_events').countDocuments();
+        eventsCount = await db.collection('position_events').countDocuments();
         console.log(`   Total position events: ${eventsCount}`);
         
         // realized_pnl_delta is optional, no migration needed
@@ -250,6 +252,10 @@ async function migrate() {
     console.log('   Email index exists:', hasEmailIndex ? '✅' : '❌');
     console.log('   Old contact index removed:', !hasContactIndex ? '✅' : '⚠️  Still exists');
     
+    // Re-count for verification
+    const totalPositions = await db.collection('user_positions').countDocuments();
+    const totalWaitlist = await db.collection('waitlist').countDocuments();
+    
     // Check field presence
     const withUnrealizedPnl = await db.collection('user_positions').countDocuments({
         unrealized_pnl: { $exists: true }
@@ -258,8 +264,8 @@ async function migrate() {
         newsletter_consent: { $exists: true }
     });
     
-    console.log(`   Positions with unrealized_pnl: ${withUnrealizedPnl}/${positionsCount}`);
-    console.log(`   Waitlist with newsletter_consent: ${withNewsletter}/${waitlistCount}`);
+    console.log(`   Positions with unrealized_pnl: ${withUnrealizedPnl}/${totalPositions}`);
+    console.log(`   Waitlist with newsletter_consent: ${withNewsletter}/${totalWaitlist}`);
     
     console.log('');
     console.log('✅ All migrations completed successfully!');
