@@ -41,6 +41,9 @@ export class PositionEvent {
   @Prop({ default: false })
   is_fifo_sell?: boolean;
 
+  @Prop({ type: String })
+  realized_pnl_delta?: string; // Profit/loss for this specific transaction (SELL/CLAIM only)
+
   @Prop()
   indexed_at?: Date;
 }

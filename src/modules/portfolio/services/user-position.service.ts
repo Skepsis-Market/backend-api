@@ -25,7 +25,7 @@ export class UserPositionService {
     const now = Date.now();
     if (market.status === 'cancelled') return 'CANCELLED';
     if (market.status === 'resolved') return 'RESOLVED';
-    if (now < market.biddingDeadline) return 'ACTIVE';
+    if (now < market.configuration?.biddingDeadline) return 'ACTIVE';
     return 'RESOLVED';
   }
 
@@ -79,26 +79,23 @@ export class UserPositionService {
       const market = marketMap.get(pos.market_id);
       const marketStatus = market ? this.calculateMarketStatus(market) : 'UNKNOWN';
       
-      // Calculate unrealized PnL if position is active
-      let unrealizedPnl = '0';
-      let currentValue = '0';
-      let roiPercent = 0;
+      // Per alignment doc: unrealized_pnl only for resolved markets, null for active
+      // Indexer sets unrealized_pnl when market resolves (win/loss)
+      // Frontend calculates it for active markets using LMSR curve
+      const isResolved = marketStatus === 'RESOLVED';
+      const unrealizedPnl = isResolved ? (pos.unrealized_pnl || '0') : null;
+      
+      // Calculate total PnL and ROI
+      const costBasisDecimal = this.toDecimal(pos.total_cost_basis);
+      const totalPnlValue = Number(pos.realized_pnl) + (unrealizedPnl ? Number(unrealizedPnl) : 0);
+      const totalPnl = String(totalPnlValue);
+      const roiPercent = costBasisDecimal > 0 ? (totalPnlValue / 1_000_000 / costBasisDecimal) * 100 : 0;
 
-      if (pos.is_active && market && marketStatus === 'ACTIVE') {
-        // For active markets, use simple estimate (could be enhanced with real-time pricing)
-        const sharesDecimal = this.toDecimal(pos.total_shares);
-        const costBasisDecimal = this.toDecimal(pos.total_cost_basis);
-        currentValue = pos.total_shares; // Simplified
-        unrealizedPnl = '0'; // Would need live pricing
-        roiPercent = 0;
-      } else if (!pos.is_active) {
-        // For closed positions, calculate final ROI
-        const realizedDecimal = this.toDecimal(pos.realized_pnl);
-        const costBasisDecimal = this.toDecimal(pos.total_cost_basis);
-        roiPercent = costBasisDecimal > 0 ? (realizedDecimal / costBasisDecimal) * 100 : 0;
+      // Check if winner (for resolved markets)
+      let isWinner = null;
+      if (isResolved && market?.resolvedValue !== undefined) {
+        isWinner = market.resolvedValue >= pos.range_lower && market.resolvedValue <= pos.range_upper;
       }
-
-      const totalPnl = String(Number(pos.realized_pnl) + Number(unrealizedPnl));
 
       return {
         market_id: pos.market_id,
@@ -110,13 +107,16 @@ export class UserPositionService {
         total_shares: pos.total_shares,
         total_cost_basis: pos.total_cost_basis,
         avg_entry_price: pos.avg_entry_price,
-        unrealized_pnl: unrealizedPnl,
+        unrealized_pnl: unrealizedPnl,  // null for active, value for resolved
         realized_pnl: pos.realized_pnl,
         total_pnl: totalPnl,
         roi_percent: roiPercent,
         first_purchase_at: pos.first_purchase_at,
         last_updated_at: pos.last_updated_at,
         is_active: pos.is_active,
+        resolved_value: isResolved ? String(market?.resolvedValue || 0) : null,
+        is_winner: isWinner,
+        close_reason: pos.close_reason || null,
       };
     });
 
@@ -133,7 +133,13 @@ export class UserPositionService {
       (sum, p) => sum + Number(p.realized_pnl),
       0,
     );
+    // Aggregate unrealized_pnl only from resolved markets (indexer sets this)
+    const totalUnrealizedPnl = allPositions.reduce(
+      (sum, p) => sum + Number(p.unrealized_pnl || 0),
+      0,
+    );
     const activeCount = allPositions.filter(p => p.is_active).length;
+    const totalPnl = totalRealizedPnl + totalUnrealizedPnl;
 
     return {
       positions: formattedPositions,
@@ -143,9 +149,14 @@ export class UserPositionService {
         active_positions: activeCount,
         total_invested: String(totalInvested),
         total_realized_pnl: String(totalRealizedPnl),
-        total_unrealized_pnl: '0', // Would need live pricing
-        total_pnl: String(totalRealizedPnl),
-        roi_percent: totalInvested > 0 ? (totalRealizedPnl / totalInvested) * 100 : 0,
+        total_unrealized_pnl: String(totalUnrealizedPnl),
+        total_pnl: String(totalPnl),
+        roi_percent: totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0,
+      },
+      metadata: {
+        decimals: 6,
+        value_unit: 'micro_usdc',
+        note: 'All monetary values in micro-units. Divide by 1,000,000 for display. unrealized_pnl is null for active markets (frontend calculates using LMSR), set by indexer for resolved markets.',
       },
     };
   }
@@ -176,17 +187,22 @@ export class UserPositionService {
     const market = await this.marketModel.findOne({ marketId }).lean();
     const marketStatus = market ? this.calculateMarketStatus(market) : 'UNKNOWN';
 
-    // Calculate unrealized PnL
-    let unrealizedPnl = '0';
-    if (position.is_active && market && marketStatus === 'ACTIVE') {
-      unrealizedPnl = '0'; // Would need live pricing
-    }
+    // Per alignment doc: unrealized_pnl only for resolved markets, null for active
+    const isResolved = marketStatus === 'RESOLVED';
+    const unrealizedPnl = isResolved ? (position.unrealized_pnl || '0') : null;
 
-    const totalPnl = String(Number(position.realized_pnl) + Number(unrealizedPnl));
+    const totalPnlValue = Number(position.realized_pnl) + (unrealizedPnl ? Number(unrealizedPnl) : 0);
+    const totalPnl = String(totalPnlValue);
     const costBasisDecimal = this.toDecimal(position.total_cost_basis);
     const roiPercent = costBasisDecimal > 0 
-      ? (this.toDecimal(totalPnl) / costBasisDecimal) * 100 
+      ? (totalPnlValue / 1_000_000 / costBasisDecimal) * 100 
       : 0;
+
+    // Check if winner (for resolved markets)
+    let isWinner = null;
+    if (isResolved && market?.resolvedValue !== undefined) {
+      isWinner = market.resolvedValue >= position.range_lower && market.resolvedValue <= position.range_upper;
+    }
 
     return {
       position: {
@@ -202,12 +218,20 @@ export class UserPositionService {
         realized_pnl: position.realized_pnl,
         total_shares_sold: position.total_shares_sold,
         total_proceeds: position.total_proceeds,
-        unrealized_pnl: unrealizedPnl,
+        unrealized_pnl: unrealizedPnl,  // null for active, value for resolved
         total_pnl: totalPnl,
         roi_percent: roiPercent,
         first_purchase_at: position.first_purchase_at,
         last_updated_at: position.last_updated_at,
         is_active: position.is_active,
+        resolved_value: isResolved ? String(market?.resolvedValue || 0) : null,
+        is_winner: isWinner,
+        close_reason: position.close_reason || null,
+      },
+      metadata: {
+        decimals: 6,
+        value_unit: 'micro_usdc',
+        note: 'All monetary values in micro-units. Divide by 1,000,000 for display.',
       },
     };
   }
@@ -252,6 +276,8 @@ export class UserPositionService {
     
     const totalInvested = positions.reduce((sum, p) => sum + Number(p.total_cost_basis), 0);
     const totalRealizedPnl = positions.reduce((sum, p) => sum + Number(p.realized_pnl), 0);
+    const totalUnrealizedPnl = positions.reduce((sum, p) => sum + Number(p.unrealized_pnl || 0), 0);
+    const totalPnl = totalRealizedPnl + totalUnrealizedPnl;
 
     // Group by market
     const byMarket = marketIds.map(marketId => {
@@ -260,7 +286,9 @@ export class UserPositionService {
       
       const invested = marketPositions.reduce((sum, p) => sum + Number(p.total_cost_basis), 0);
       const realizedPnl = marketPositions.reduce((sum, p) => sum + Number(p.realized_pnl), 0);
+      const unrealizedPnl = marketPositions.reduce((sum, p) => sum + Number(p.unrealized_pnl || 0), 0);
       const totalShares = marketPositions.reduce((sum, p) => sum + Number(p.total_shares), 0);
+      const pnl = realizedPnl + unrealizedPnl;
 
       return {
         market_id: marketId,
@@ -269,8 +297,8 @@ export class UserPositionService {
         total_shares: String(totalShares),
         invested: String(invested),
         current_value: String(totalShares), // Simplified
-        pnl: String(realizedPnl),
-        roi_percent: invested > 0 ? (realizedPnl / invested) * 100 : 0,
+        pnl: String(pnl),
+        roi_percent: invested > 0 ? (pnl / invested) * 100 : 0,
       };
     });
 
@@ -281,13 +309,18 @@ export class UserPositionService {
         closed_positions: closedPositions.length,
         total_markets: marketIds.length,
         total_invested: String(totalInvested),
-        current_value: String(totalInvested), // Simplified
+        current_value: String(totalInvested + totalUnrealizedPnl),
         total_realized_pnl: String(totalRealizedPnl),
-        total_unrealized_pnl: '0',
-        total_pnl: String(totalRealizedPnl),
-        roi_percent: totalInvested > 0 ? (totalRealizedPnl / totalInvested) * 100 : 0,
+        total_unrealized_pnl: String(totalUnrealizedPnl),
+        total_pnl: String(totalPnl),
+        roi_percent: totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0,
       },
       by_market: byMarket.sort((a, b) => Number(b.invested) - Number(a.invested)),
+      metadata: {
+        decimals: 6,
+        value_unit: 'micro_usdc',
+        note: 'All monetary values in micro-units. Divide by 1,000,000 for display.',
+      },
     };
   }
 
@@ -324,17 +357,33 @@ export class UserPositionService {
 
     const totalCount = await this.userPositionModel.countDocuments(query);
 
-    const formattedPositions = positions.map(pos => ({
-      user_address: pos.user_address,
-      range_lower: pos.range_lower,
-      range_upper: pos.range_upper,
-      total_shares: pos.total_shares,
-      total_cost_basis: pos.total_cost_basis,
-      avg_entry_price: pos.avg_entry_price,
-      unrealized_pnl: '0', // Would need live pricing
-      realized_pnl: pos.realized_pnl,
-      first_purchase_at: pos.first_purchase_at,
-    }));
+    // Get market to check if resolved
+    const market = await this.marketModel.findOne({ marketId }).lean();
+    const marketStatus = market ? this.calculateMarketStatus(market) : 'UNKNOWN';
+    const isResolved = marketStatus === 'RESOLVED';
+
+    const formattedPositions = positions.map(pos => {
+      // Check if winner (for resolved markets)
+      let isWinner = null;
+      if (isResolved && market?.resolvedValue !== undefined) {
+        isWinner = market.resolvedValue >= pos.range_lower && market.resolvedValue <= pos.range_upper;
+      }
+
+      return {
+        user_address: pos.user_address,
+        range_lower: pos.range_lower,
+        range_upper: pos.range_upper,
+        total_shares: pos.total_shares,
+        total_cost_basis: pos.total_cost_basis,
+        avg_entry_price: pos.avg_entry_price,
+        unrealized_pnl: isResolved ? (pos.unrealized_pnl || '0') : null,  // null for active, value for resolved
+        realized_pnl: pos.realized_pnl,
+        first_purchase_at: pos.first_purchase_at,
+        resolved_value: isResolved ? String(market?.resolvedValue || 0) : null,
+        is_winner: isWinner,
+        close_reason: pos.close_reason || null,
+      };
+    });
 
     // Market summary
     const allPositions = await this.userPositionModel
@@ -352,6 +401,11 @@ export class UserPositionService {
         total_holders: uniqueHolders,
         total_shares_held: String(totalShares),
         total_volume: String(totalVolume),
+      },
+      metadata: {
+        decimals: 6,
+        value_unit: 'micro_usdc',
+        note: 'All monetary values in micro-units. Divide by 1,000,000 for display.',
       },
     };
   }

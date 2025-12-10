@@ -10,6 +10,47 @@ export class SeriesController {
   constructor(private readonly seriesService: SeriesService) {}
 
   /**
+   * GET /api/series/id/:id
+   * Get series by ObjectId
+   */
+  @Get('id/:id')
+  @ApiOperation({ 
+    summary: 'Get series by ID', 
+    description: 'Get series metadata and active market by MongoDB ObjectId.' 
+  })
+  @ApiParam({ name: 'id', description: 'Series MongoDB ObjectId (e.g., "693599e21f25abda20e5a6fd")' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Series and active market retrieved successfully',
+    schema: {
+      example: {
+        series: {
+          id: "693599e21f25abda20e5a6fd",
+          name: "Bitcoin Hourly",
+          slug: "btc-hourly",
+          frequency: "1h",
+          asset: "BTC",
+          currentRound: 42,
+          nextSpawnTime: 1733601600000,
+          isActive: true
+        },
+        activeMarket: {
+          id: "0x123...",
+          round: 42,
+          closesAt: 1733598000000,
+          min: 95000,
+          max: 96000,
+          status: "active"
+        }
+      }
+    }
+  })
+  @ApiResponse({ status: 404, description: 'Series not found' })
+  async getSeriesById(@Param('id') id: string) {
+    return this.seriesService.getSeriesById(id);
+  }
+
+  /**
    * GET /api/series/:slug
    * Fast load: Get series metadata + active market
    */

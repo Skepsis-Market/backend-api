@@ -12,6 +12,65 @@ export class SeriesService {
   ) {}
 
   /**
+   * GET /api/series/id/:id
+   * Get series by ObjectId
+   */
+  async getSeriesById(id: string) {
+    const series = await this.seriesModel.findById(id).lean();
+    
+    if (!series) {
+      throw new NotFoundException(`Series with id "${id}" not found`);
+    }
+
+    // Get the active market if it exists
+    let activeMarket = null;
+    if (series.activeMarketId) {
+      const market = await this.marketModel.findOne({ 
+        marketId: series.activeMarketId 
+      }).lean();
+      
+      if (market) {
+        activeMarket = {
+          id: market.marketId,
+          round: market.roundNumber,
+          closesAt: market.configuration.biddingDeadline,
+          resolvesAt: market.configuration.resolutionTime,
+          min: market.configuration.minValue,
+          max: market.configuration.maxValue,
+          bucketCount: market.configuration.bucketCount,
+          bucketWidth: market.configuration.bucketWidth,
+          decimalPrecision: market.configuration.decimalPrecision,
+          valueUnit: market.configuration.valueUnit,
+          valueType: market.configuration.valueType,
+          valuePrefix: market.configuration.valuePrefix,
+          valueSuffix: market.configuration.valueSuffix,
+          useKSuffix: market.configuration.useKSuffix,
+          question: market.configuration.question,
+          description: market.configuration.description,
+          marketImage: market.configuration.marketImage,
+          priceFeed: market.priceFeed,
+          status: this.calculateMarketStatus(market),
+        };
+      }
+    }
+
+    return {
+      series: {
+        id: series._id,
+        name: series.name,
+        slug: series.slug,
+        frequency: series.frequency,
+        asset: series.asset,
+        currentRound: series.currentRoundNumber,
+        nextSpawnTime: series.nextSpawnTime,
+        isActive: series.isActive,
+        template: series.template,
+      },
+      activeMarket,
+    };
+  }
+
+  /**
    * GET /api/series/:slug
    * Fast load: Get series metadata + active market
    */

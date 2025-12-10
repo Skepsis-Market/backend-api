@@ -18,11 +18,8 @@ export class WaitlistService {
    */
   async joinWaitlist(dto: JoinWaitlistDto) {
     try {
-      // Parse and validate contact
-      const parsed = parseContact(dto.contact);
-
-      // Check if already in waitlist
-      const existing = await this.waitlistModel.findOne({ contact: parsed.contact });
+      // Check if already in waitlist by email
+      const existing = await this.waitlistModel.findOne({ email: dto.email.toLowerCase() });
       if (existing) {
         throw new ConflictException('Already registered in waitlist');
       }
@@ -44,9 +41,9 @@ export class WaitlistService {
 
       // Create waitlist entry with code and approved status
       const waitlistEntry = new this.waitlistModel({
-        contact: parsed.contact,
-        contact_raw: parsed.contact_raw,
-        platform: parsed.platform,
+        email: dto.email.toLowerCase(),
+        newsletter_consent: dto.newsletter_consent || false,
+        platform: 'email',
         status: 'approved',
         access_code: code,
         approved_at: new Date(),
@@ -58,13 +55,14 @@ export class WaitlistService {
 
       return {
         message: 'Added to waitlist',
-        platform: parsed.platform,
+        email: dto.email,
+        access_code: code,
       };
     } catch (error) {
       if (error instanceof ConflictException) {
         throw error;
       }
-      throw new BadRequestException(error.message || 'Invalid contact format');
+      throw new BadRequestException(error.message || 'Invalid email format');
     }
   }
 

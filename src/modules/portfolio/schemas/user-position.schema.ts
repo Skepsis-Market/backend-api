@@ -29,6 +29,9 @@ export class UserPosition {
   @Prop({ required: true, type: String, default: '0' })
   realized_pnl: string;
 
+  @Prop({ type: String, default: '0' })
+  unrealized_pnl: string;
+
   @Prop({ required: true, type: String, default: '0' })
   total_shares_sold: string;
 
@@ -46,6 +49,9 @@ export class UserPosition {
 
   @Prop({ required: true, default: true, index: true })
   is_active: boolean;
+
+  @Prop({ type: String, required: false })
+  close_reason?: string; // 'CLAIMED' | 'LOST_RESOLUTION'
 }
 
 export const UserPositionSchema = SchemaFactory.createForClass(UserPosition);

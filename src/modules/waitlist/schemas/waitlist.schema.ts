@@ -5,14 +5,20 @@ export type WaitlistDocument = Waitlist & Document;
 
 @Schema({ timestamps: true })
 export class Waitlist {
-  @Prop({ required: true })
-  contact: string; // Normalized: "tg:username" or "x:handle"
+  @Prop({ required: false })
+  contact: string; // Legacy: Normalized "tg:username" or "x:handle" (for old entries)
 
-  @Prop({ required: true })
-  contact_raw: string; // Original input from user
+  @Prop({ required: false })
+  contact_raw: string; // Legacy: Original input from user (for old entries)
 
-  @Prop({ required: true, enum: ['telegram', 'twitter'] })
-  platform: string;
+  @Prop({ required: false, enum: ['telegram', 'twitter', 'email'] })
+  platform: string; // Legacy field, now optional
+
+  @Prop({ required: false })
+  email: string; // Email address (for new entries)
+
+  @Prop({ default: false })
+  newsletter_consent: boolean; // User opted in to newsletter
 
   @Prop()
   access_code: string; // 6-char code, generated later

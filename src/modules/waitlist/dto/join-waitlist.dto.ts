@@ -1,12 +1,22 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsString, IsEmail, IsBoolean, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class JoinWaitlistDto {
   @ApiProperty({
-    description: 'Telegram username (starting with @) or Twitter/X handle',
-    example: '@johndoe',
+    description: 'Email address',
+    example: 'user@example.com',
   })
   @IsNotEmpty()
-  @IsString()
-  contact: string;
+  @IsEmail()
+  email: string;
+
+  @ApiProperty({
+    description: 'User consent for newsletter subscription',
+    example: true,
+    required: false,
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  newsletter_consent?: boolean;
 }

@@ -106,6 +106,11 @@ export class LeaderboardService {
     return {
       leaderboard,
       updated_at: new Date().toISOString(),
+      metadata: {
+        decimals: 6,
+        value_unit: 'micro_usdc',
+        note: 'All monetary values in micro-units. Divide by 1,000,000 for display.',
+      },
     };
   }
 }
