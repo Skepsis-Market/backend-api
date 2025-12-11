@@ -14,7 +14,9 @@
     "script:list-waitlist": "ts-node src/scripts/list-waitlist.ts",
     "script:extract-wallets": "ts-node src/scripts/extract-wallets.ts",
     "script:update-market-formatting": "ts-node src/scripts/update-market-formatting.ts",
-    "script:add-market-images": "ts-node src/scripts/add-market-images.ts"
+    "script:add-market-images": "ts-node src/scripts/add-market-images.ts",
+    "script:send-access-codes": "ts-node src/scripts/send-access-codes.ts",
+    "script:send-single-code": "ts-node src/scripts/send-single-code.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.927.0",
@@ -34,6 +36,7 @@
     "dotenv": "^17.2.3",
     "mongoose": "^8.19.1",
     "multer": "^2.0.2",
+    "nodemailer": "^6.9.8",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "swagger-ui-express": "^5.0.1",
@@ -43,6 +46,7 @@
     "@nestjs/cli": "^11.0.10",
     "@types/inquirer": "^9.0.9",
     "@types/node": "^24.8.1",
+    "@types/nodemailer": "^6.4.14",
     "inquirer": "^12.10.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"

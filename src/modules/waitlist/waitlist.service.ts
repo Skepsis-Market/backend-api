@@ -122,14 +122,23 @@ export class WaitlistService {
   }
 
   /**
-   * Set or unset shared flag by contact (telegram/twitter handle)
+   * Set or unset shared flag by contact (telegram/twitter handle) or email
    * Creates a new user with access code if they don't exist (upsert)
    */
   async setShared(contact: string, isShared: boolean, sharedBy?: string) {
-    // Parse contact to get normalized format
-    const parsed = parseContact(contact);
+    // Check if it's an email address
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const isEmail = emailRegex.test(contact);
     
-    let entry = await this.waitlistModel.findOne({ contact: parsed.contact });
+    let entry;
+    if (isEmail) {
+      // Search by email for new schema
+      entry = await this.waitlistModel.findOne({ email: contact });
+    } else {
+      // Parse contact for legacy support (only for non-email)
+      const parsed = parseContact(contact);
+      entry = await this.waitlistModel.findOne({ contact: parsed.contact });
+    }
     
     // If user doesn't exist, create them with an access code
     if (!entry) {
@@ -148,25 +157,40 @@ export class WaitlistService {
         throw new Error('Failed to generate unique access code');
       }
 
-      // Create new entry
-      entry = new this.waitlistModel({
-        contact: parsed.contact,
-        contact_raw: parsed.contact_raw,
-        platform: parsed.platform,
-        status: 'approved',
-        access_code: code,
-        approved_at: new Date(),
-        persona: ['trader', 'lp'],
-        isShared: isShared,
-        shared_at: isShared ? new Date() : undefined,
-        shared_by: isShared ? sharedBy : undefined,
-      });
+      // Create new entry based on input type
+      if (isEmail) {
+        entry = new this.waitlistModel({
+          email: contact,
+          newsletter_consent: false,
+          status: 'approved',
+          access_code: code,
+          approved_at: new Date(),
+          persona: ['trader', 'lp'],
+          isShared: isShared,
+          shared_at: isShared ? new Date() : undefined,
+          shared_by: isShared ? sharedBy : undefined,
+        });
+      } else {
+        const parsed = parseContact(contact);
+        entry = new this.waitlistModel({
+          contact: parsed.contact,
+          contact_raw: parsed.contact_raw,
+          platform: parsed.platform,
+          status: 'approved',
+          access_code: code,
+          approved_at: new Date(),
+          persona: ['trader', 'lp'],
+          isShared: isShared,
+          shared_at: isShared ? new Date() : undefined,
+          shared_by: isShared ? sharedBy : undefined,
+        });
+      }
 
       await entry.save();
 
       return {
         message: `User created and access code ${isShared ? 'shared' : 'generated'}`,
-        contact: entry.contact_raw,
+        contact: entry.email || entry.contact_raw,
         access_code: entry.access_code,
         isShared: entry.isShared,
         shared_at: entry.shared_at,
@@ -210,7 +234,7 @@ export class WaitlistService {
 
     return {
       message: `Access code ${isShared ? 'marked as shared' : 'unshared'}`,
-      contact: entry.contact_raw,
+      contact: entry.email || entry.contact_raw,
       access_code: entry.access_code,
       isShared: entry.isShared,
       shared_at: entry.shared_at,
