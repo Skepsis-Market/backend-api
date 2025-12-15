@@ -55,11 +55,11 @@ async function main() {
 
   const Waitlist = mongoose.model('waitlists', WaitlistSchema);
 
-  // Get all entries
-  const allEntries = await Waitlist.find().sort({ createdAt: -1 });
+  // Get only email-based entries (filter out legacy contact entries)
+  const allEntries = await Waitlist.find({ email: { $exists: true, $ne: null } }).sort({ createdAt: -1 });
 
   if (allEntries.length === 0) {
-    console.log('❌ No waitlist entries found.');
+    console.log('❌ No email waitlist entries found.');
     await mongoose.disconnect();
     process.exit(0);
   }
@@ -99,9 +99,8 @@ async function main() {
     
     pending.forEach((entry: any, index: number) => {
       const num = String(index + 1).padEnd(2);
-      // Support both old (contact) and new (email) format
-      const contact = (entry.email || entry.contact_raw || entry.contact || 'N/A').padEnd(29);
-      const platform = (entry.platform || 'email').padEnd(9);
+      const contact = (entry.email || 'N/A').padEnd(29);
+      const platform = 'email'.padEnd(9);
       const date = new Date(entry.createdAt).toLocaleString().padEnd(19);
       console.log(`│ ${num} │ ${contact} │ ${platform} │ ${date} │`);
     });
@@ -109,48 +108,7 @@ async function main() {
     console.log('└────┴─────────────────────────┴───────────┴─────────────────────┘\n');
   }
 
-  // Display APPROVED entries
-  if (approved.length > 0) {
-    console.log('✅ APPROVED (With Access Codes):\n');
-    console.log('┌────┬───────────────────────────────┬────────────┬──────────────┬────────────┬────────┐');
-    console.log('│ #  │ Contact/Email                 │ Code       │ Persona      │ Approved   │ Shared │');
-    console.log('├────┼───────────────────────────────┼────────────┼──────────────┼────────────┼────────┤');
-    
-    approved.forEach((entry: any, index: number) => {
-      const num = String(index + 1).padEnd(2);
-      const contact = (entry.email || entry.contact_raw || entry.contact || 'N/A').padEnd(29);
-      const code = (entry.access_code || 'N/A').padEnd(10);
-      const persona = (entry.persona?.join(', ') || 'none').padEnd(12);
-      const date = new Date(entry.approved_at).toLocaleDateString().padEnd(10);
-      const shared = (entry.isShared ? '✅' : '❌').padEnd(6);
-      console.log(`│ ${num} │ ${contact} │ ${code} │ ${persona} │ ${date} │ ${shared} │`);
-    });
-    
-    console.log('└────┴───────────────────────────────┴────────────┴──────────────┴────────────┴────────┘\n');
-  }
-
-  // Display USED entries
-  if (used.length > 0) {
-    console.log('🔒 USED (Active Users):\n');
-    console.log('┌────┬───────────────────────────────┬────────────┬──────────────┬───────┬──────────────────────┐');
-    console.log('│ #  │ Contact/Email                 │ Code       │ Persona      │ Count │ Wallets              │');
-    console.log('├────┼───────────────────────────────┼────────────┼──────────────┼───────┼──────────────────────┤');
-    
-    used.forEach((entry: any, index: number) => {
-      const num = String(index + 1).padEnd(2);
-      const contact = (entry.email || entry.contact_raw || entry.contact || 'N/A').padEnd(29);
-      const code = (entry.access_code || 'N/A').padEnd(10);
-      const persona = (entry.persona?.join(', ') || 'none').padEnd(12);
-      const count = String(entry.wallet_addresses?.length || 0).padEnd(5);
-      const wallets = entry.wallet_addresses?.length > 0 
-        ? entry.wallet_addresses.map((w: string) => w.slice(0, 10) + '...').join(', ').slice(0, 20)
-        : 'None';
-      const walletsStr = wallets.padEnd(20);
-      console.log(`│ ${num} │ ${contact} │ ${code} │ ${persona} │ ${count} │ ${walletsStr} │`);
-    });
-    
-    console.log('└────┴───────────────────────────────┴────────────┴──────────────┴───────┴──────────────────────┘\n');
-  }
+  // Skip approved and used tables - just show counts above
 
   console.log('═══════════════════════════════════════════════════════════════\n');
 
