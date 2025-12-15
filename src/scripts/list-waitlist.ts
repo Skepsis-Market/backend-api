@@ -71,23 +71,41 @@ async function main() {
   const shared = allEntries.filter((e: any) => e.isShared === true);
   const approvedNotShared = allEntries.filter((e: any) => e.status === 'approved' && !e.isShared);
 
-  // Count wallets
-  const totalWallets = allEntries.reduce((sum: number, e: any) => {
+  // Calculate 24-hour stats
+  const now = new Date();
+  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  
+  const requestedLast24h = allEntries.filter((e: any) => 
+    new Date(e.createdAt) > twentyFourHoursAgo
+  ).length;
+  
+  const connectedLast24h = used.filter((e: any) => 
+    e.used_at && new Date(e.used_at) > twentyFourHoursAgo
+  ).length;
+
+  // Count wallets (only from used entries with wallets)
+  const usedWithWallets = used.filter((e: any) => e.wallet_addresses && e.wallet_addresses.length > 0);
+  const totalWallets = usedWithWallets.reduce((sum: number, e: any) => {
     return sum + (e.wallet_addresses?.length || 0);
   }, 0);
   const uniqueWallets = new Set(
-    allEntries.flatMap((e: any) => e.wallet_addresses || [])
+    usedWithWallets.flatMap((e: any) => e.wallet_addresses || [])
   ).size;
 
   console.log('═══════════════════════════════════════════════════════════════');
-  console.log(`📊 TOTAL ENTRIES: ${allEntries.length}`);
+  console.log(`📊 TOTAL ENTRIES: ${allEntries.length} (email-based only)`);
   console.log('───────────────────────────────────────────────────────────────');
   console.log(`⏳ Pending:  ${pending.length}`);
   console.log(`✅ Approved: ${approved.length} (${approvedNotShared.length} not shared)`);
   console.log(`🔒 Used:     ${used.length}`);
   console.log(`📤 Shared:   ${shared.length}`);
   console.log('───────────────────────────────────────────────────────────────');
-  console.log(`💼 Connected Wallets: ${totalWallets} (${uniqueWallets} unique)`);
+  console.log(`💼 Connected Wallets: ${totalWallets} total, ${uniqueWallets} unique`);
+  console.log(`   Users with wallets: ${usedWithWallets.length} of ${used.length}`);
+  console.log('───────────────────────────────────────────────────────────────');
+  console.log(`📈 Last 24 Hours:`);
+  console.log(`   New requests: ${requestedLast24h}`);
+  console.log(`   Connected wallet: ${connectedLast24h}`);
   console.log('═══════════════════════════════════════════════════════════════\n');
 
   // Display PENDING entries
