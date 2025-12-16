@@ -4,6 +4,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { MarketsService } from './markets.service';
 import { CreateMarketDto } from './dto/create-market.dto';
 import { UpdateMarketStatusDto } from './dto/update-market-status.dto';
+import { UpdateMarketNameDto } from './dto/update-market-name.dto';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { S3UploadService } from '../../common/services/s3-upload.service';
 
@@ -315,6 +316,40 @@ curl -X POST https://api.skepsis.live/api/markets \\
   @ApiResponse({ status: 404, description: 'Market not found' })
   async getMarketByUrl(@Param('marketUrl') marketUrl: string) {
     return this.marketsService.getMarketByUrl(marketUrl);
+  }
+
+  /**
+   * PATCH /api/markets/:marketId/name
+   * Update market name
+   */
+  @UseGuards(AdminGuard)
+  @Patch(':marketId/name')
+  @ApiSecurity('admin-key')
+  @ApiOperation({ 
+    summary: 'Update market name (Admin)', 
+    description: 'Update the display name of a market' 
+  })
+  @ApiParam({ name: 'marketId', description: 'Market ID (Sui object ID)' })
+  @ApiBody({
+    type: UpdateMarketNameDto,
+    examples: {
+      updateName: {
+        summary: 'Update Market Name',
+        description: 'Change the market display name',
+        value: {
+          marketName: 'Bitcoin Price Prediction - January 2026'
+        }
+      }
+    }
+  })
+  @ApiResponse({ status: 200, description: 'Market name updated successfully' })
+  @ApiResponse({ status: 401, description: 'Invalid or missing admin credentials' })
+  @ApiResponse({ status: 404, description: 'Market not found' })
+  async updateMarketName(
+    @Param('marketId') marketId: string,
+    @Body() updateNameDto: UpdateMarketNameDto,
+  ) {
+    return this.marketsService.updateMarketName(marketId, updateNameDto.marketName);
   }
 
   /**

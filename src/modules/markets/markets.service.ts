@@ -88,6 +88,25 @@ export class MarketsService {
   }
 
   /**
+   * Update market name
+   */
+  async updateMarketName(marketId: string, marketName: string) {
+    const market = await this.marketModel.findOne({ marketId });
+    if (!market) {
+      throw new NotFoundException(`Market ${marketId} not found`);
+    }
+
+    market.configuration.marketName = marketName;
+    await market.save();
+
+    return {
+      message: 'Market name updated successfully',
+      marketId: market.marketId,
+      marketName: market.configuration.marketName,
+    };
+  }
+
+  /**
    * Update market status (resolved or cancelled)
    * When status is 'resolved', resolvedValue should be provided
    */
