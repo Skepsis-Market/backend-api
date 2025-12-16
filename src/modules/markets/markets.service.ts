@@ -97,6 +97,7 @@ export class MarketsService {
     }
 
     market.configuration.marketName = marketName;
+    market.markModified('configuration');
     await market.save();
 
     return {
