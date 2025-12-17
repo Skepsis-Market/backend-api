@@ -126,7 +126,25 @@ async function main() {
     console.log('└────┴─────────────────────────┴───────────┴─────────────────────┘\n');
   }
 
-  // Skip approved and used tables - just show counts above
+  // Display APPROVED NOT SHARED entries
+  if (approvedNotShared.length > 0) {
+    console.log('✅ APPROVED BUT NOT SHARED:\n');
+    console.log('┌────┬───────────────────────────────┬────────────┬─────────────────────┐');
+    console.log('│ #  │ Email                         │ Code       │ Approved At         │');
+    console.log('├────┼───────────────────────────────┼────────────┼─────────────────────┤');
+    
+    approvedNotShared.forEach((entry: any, index: number) => {
+      const num = String(index + 1).padEnd(2);
+      const contact = (entry.email || 'N/A').padEnd(29);
+      const code = (entry.access_code || 'N/A').padEnd(10);
+      const date = new Date(entry.approved_at).toLocaleString().padEnd(19);
+      console.log(`│ ${num} │ ${contact} │ ${code} │ ${date} │`);
+    });
+    
+    console.log('└────┴───────────────────────────────┴────────────┴─────────────────────┘\n');
+  }
+
+  // Skip other tables - just show counts in summary above
 
   console.log('═══════════════════════════════════════════════════════════════\n');
 
