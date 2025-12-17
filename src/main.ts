@@ -8,7 +8,7 @@ async function bootstrap() {
 
   // Enable CORS
   const allowedOrigins = process.env.NODE_ENV === 'production'
-    ? ['https://skepsis.live', 'https://beta.skepsis.live', 'https://www.skepsis.live']
+    ? ['https://skepsis.live', 'https://beta.skepsis.live', 'https://www.skepsis.live', 'http://localhost:3000']
     : ['http://localhost:3000', 'http://localhost:3001'];
 
   app.enableCors({
